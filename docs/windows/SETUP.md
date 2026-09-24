@@ -25,7 +25,8 @@ git clone https://github.com/JWM0203/MeetingCopilot.git
 cd MeetingCopilot
 npm install        # postinstall applies patches/ (transformers.js patch — do not remove)
 npm run build
-start.bat          # or: npm start
+start.bat          # or: npm start (background)
+npm stop           # stop the background process
 ```
 
 > 🇨🇳 If npm / Electron downloads are slow in China, create a `.npmrc` containing
@@ -81,7 +82,7 @@ config/tokenizer files). The encoder runs on the GPU via DirectML.
 Content protection (`Stealth` toggle in the title bar, on by default) excludes
 the window from OBS, screen shares and screenshots on Windows. The global
 hotkeys default to **Control+B** (hide/show) and **Control+Shift+S**
-(region-screenshot Q&A).
+(full-screen Q&A).
 
 ## Data locations
 

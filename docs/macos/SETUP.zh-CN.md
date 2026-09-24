@@ -2,7 +2,7 @@
 
 [English](SETUP.md) · [Windows 指南](../windows/SETUP.zh-CN.md)
 
-macOS 版保留了完整链路——流式转录、提词式回答、简历/JD 贴合——但有两个平台差异：
+macOS 版保留了完整链路——流式转录、提词式回答、简历与第二简历参考——但有两个平台差异：
 
 1. **没有系统回环采集。** Electron 的 `audio: 'loopback'` 仅支持 Windows，macOS 上「对方」通道改为从可选择的**音频输入设备**录制。要听到会议软件的声音，需要经 BlackHole 等虚拟设备路由系统音频（见下文）。
 2. **隐身是尽力而为。** 新版 ScreenCaptureKit 客户端仍可能捕获窗口，macOS 上无法保证完全隐身。
@@ -27,7 +27,8 @@ git clone https://github.com/JWM0203/MeetingCopilot.git
 cd MeetingCopilot
 npm install        # postinstall 自动应用 patches/（transformers.js 补丁，勿删）
 npm run build
-npm start
+npm start          # 后台启动
+npm stop           # 关闭后台运行的程序
 ```
 
 ## 音频：把会议声音接进 MeetingCopilot
@@ -53,13 +54,14 @@ Apple 芯片上已验证的项目内环境：
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements-funasr.txt
 npm start
+# 需要关闭时再执行：npm stop
 ```
 
 应用会自动发现 `.venv`（查找顺序：环境变量 `MC_FUNASR_PYTHON` → 项目 `.venv/bin/python` → `python3` → `python`）。`--device auto` 依次尝试 CUDA、Apple MPS、CPU；加速器初始化失败自动退回 CPU。应用只加载当前选中的一个 FunASR 模型，控制 8 GB 机型的内存占用——切换模型会重启引擎（60–90 秒）。选中的模型首次运行时从 ModelScope 自动下载（paraformer 约 880 MB，Nano 约 1.7 GB）。
 
 ## 隐身限制
 
-「隐身」开关仍会应用 Electron 内容保护，旧式采集 API 会遵守；但基于新版 **ScreenCaptureKit** 的应用可能仍能捕获窗口——macOS 上请把隐身当作尽力而为。全局快捷键默认 **Command+B**（隐藏/呼出）、**Command+Shift+S**（框选截图问答）。
+「隐身」开关仍会应用 Electron 内容保护，旧式采集 API 会遵守；但基于新版 **ScreenCaptureKit** 的应用可能仍能捕获窗口——macOS 上请把隐身当作尽力而为。全局快捷键默认 **Command+B**（隐藏/呼出）、**Command+Shift+S**（完整屏幕截图问答）。
 
 ## 数据位置
 

@@ -86,12 +86,12 @@ If another app already owns that hotkey, registration fails silently — the tra
 
 - Windows: the window is excluded from supported capture paths (screen recording, meeting sharing, screenshots).
 - macOS: recent ScreenCaptureKit clients may still capture it. Best-effort, not a guarantee.
-- The region-screenshot selection overlay is content-protected too, so it never shows up in a recording.
+- Screenshot Q&A captures the complete primary display; with Stealth on, the MeetingCopilot window is excluded from the capture.
 
 ---
 
 ## Still stuck
 
-1. Settings → Advanced → "Diagnostics" → "Copy diagnostics". The report is built locally and contains **no API keys, resume/JD text or transcripts**, so it is safe to paste into a public issue.
+1. Settings → Advanced → "Diagnostics" → "Copy diagnostics". The report is built locally and contains **no API keys, resume or second-resume text, or transcripts**, so it is safe to paste into a public issue.
 2. Open an issue at [GitHub Issues](https://github.com/JWM0203/MeetingCopilot/issues) with the report and: what you did, what you expected, what happened instead.
 3. If a provider is involved, include the error code and request id from "Test connection".

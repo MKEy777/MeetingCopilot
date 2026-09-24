@@ -22,7 +22,8 @@ git clone https://github.com/JWM0203/MeetingCopilot.git
 cd MeetingCopilot
 npm install        # postinstall applies patches/ — do not remove it
 npm run build
-npm start
+npm start          # start in the background
+npm stop           # stop the background process
 ```
 
 The first launch opens the same setup wizard as the Windows build; walk through it with [QUICK_START.en.md](QUICK_START.en.md).

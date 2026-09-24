@@ -41,7 +41,7 @@ Live transcription of the other side · first-person teleprompter answers · cap
 
 ![Live demo: real-time transcription + auto answer](docs/demo.gif)
 
-*Real capture, no mockup: the interviewer's voice is transcribed while they are still speaking (left, live gray subtitle), and a read-aloud answer grounded in your resume streams in automatically (right).*
+*Real capture, no mockup: the interviewer's voice is transcribed while they are still speaking (left, live gray subtitle), and a read-aloud answer guided by your second resume streams in automatically (right).*
 
 ### 🎬 3-minute real-world walkthrough
 
@@ -79,13 +79,13 @@ You can reopen the wizard any time from *⚙ Settings → Run the setup wizard a
 - ⚡ **Four switchable ASR backend families** — local sidecars (FunASR by default; experimental MOSS-Transcribe 0.9B), local Whisper turbo (offline fallback, DirectML GPU), Alibaba Cloud `fun-asr-realtime`, and MiMo per-segment. FunASR provides live partials; MOSS emits a finalized utterance after a pause.
 - 🌍 **Bilingual (zh / en) out of the box** — the ASR detects Chinese↔English switches automatically mid-meeting, with no settings to touch; one click on the answer-language toggle (`A:EN`) and the teleprompter output flips to English too. Built for English interviews and code-switching conversations.
 - 🌐 **Fully English or Chinese interface** — every label, tooltip, dialog and status message is available in both languages. Switch under *Settings → Appearance → UI Language*; first launch follows your OS language automatically. UI language and answer language are independent, so you can run an English UI while reading Chinese answers, or vice versa.
-- 🧠 **First-person teleprompter answers** — bring your own key, any OpenAI-compatible LLM (DeepSeek recommended). Answers are written to be read aloud verbatim: conclusion first, then 2-3 short points; STAR for behavioral questions; idea → key points → complexity for technical ones. Never invents experience beyond your resume.
-- 📄 **Per-session resume + JD slots** — import `.md/.txt/.docx/.pdf`; parsing is local and deterministic, nothing gets uploaded. Question-type detection (behavioral / technical / smalltalk) appends a zero-latency answering hint.
+- 🧠 **First-person teleprompter answers** — bring your own key, any OpenAI-compatible LLM (DeepSeek recommended). Answers are written to be read aloud verbatim: conclusion first, then 2-3 short points; STAR for behavioral questions; idea → key points → complexity for technical ones. The second resume is preferred, while personal experience stays grounded in your resume.
+- 📄 **Per-session resume + second resume slots** — import `.md/.txt/.docx/.pdf`; parsing is local and deterministic. Use the second resume for interview notes, common questions, technical fundamentals and answer points; the configured LLM uses it as the preferred reference when answering. Question-type detection appends an answering hint.
 - 🔁 **Rolling interview memo** — a structured summary (questions asked / facts you claimed / interviewer focus) updates asynchronously after each answer, so a 60-minute interview stays self-consistent while per-request tokens stay flat.
 - 🚀 **Prefix-cache prewarm** — pressing ▶ fires a 1-token request that pre-builds the LLM provider's KV prefix cache, so the first real answer prefills from cache (verified via DeepSeek `prompt_cache_hit_tokens`); kept warm automatically during capture.
-- 🖼️ **Region-screenshot Q&A** — drag-select any screen region (the selection overlay itself is invisible to recording) and ask a vision model (MiMo / Gemini) about it.
+- 🖼️ **Full-screen Q&A** — capture the complete primary display with one click and ask a vision model (MiMo / Gemini) about it.
 - 🥷 **Capture protection** — content protection plus a global hide/show hotkey. Windows excludes the window from supported captures; macOS cannot guarantee invisibility against modern ScreenCaptureKit clients.
-- 🩺 **Connection tests, service status and local diagnostics** — one click tells you whether a key, the network or the account is at fault (14 normalized error codes), and the diagnostics report is built locally with no keys, transcripts or resume text in it.
+- 🩺 **Connection tests, service status and local diagnostics** — one click tells you whether a key, the network or the account is at fault (14 normalized error codes), and the diagnostics report is built locally with no keys, transcripts or imported resume/reference text in it.
 - 🔔 **System tray** — show/hide, start/stop transcription, new session, settings, service status, help and quit, all without a taskbar button. Optional start-at-login, off by default.
 - 🌗 **Dark / light / follow-system themes**, 3-step answer font size, latency HUD, inline translation, multi-session with fully isolated transcript + chat + material per meeting.
 
@@ -103,7 +103,7 @@ You can reopen the wizard any time from *⚙ Settings → Run the setup wizard a
 
 ![Bilingual demo: automatic zh/en switching](docs/demo-bilingual.gif)
 
-*A Chinese question, then an English one — same session, nothing reconfigured. The local ASR picks up the language switch automatically (both at ~1.6 s), and after one click on `答:EN` the answer streams out in English, still grounded in the same resume.*
+*A Chinese question, then an English one — same session, nothing reconfigured. The local ASR picks up the language switch automatically (both at ~1.6 s), and after one click on `答:EN` the answer streams out in English, still guided by the same second resume.*
 
 ![bilingual answer](docs/bilingual.png)
 
@@ -174,7 +174,7 @@ Place [`onnx-community/whisper-large-v3-turbo-ONNX`](https://huggingface.co/onnx
 - API keys are encrypted at rest with Electron `safeStorage` (Windows DPAPI / macOS Keychain) and never reach the renderer process.
 - All data (settings / sessions / materials) lives under Electron's per-user `userData` directory (`%APPDATA%/MeetingCopilot/` on Windows and `~/Library/Application Support/MeetingCopilot/` on macOS). No telemetry, no accounts, no server.
 - With the local ASR backends, audio never leaves your machine; with BYOK LLMs, transcripts go only to the provider you configured.
-- The diagnostics report is built locally and contains no keys, transcripts or resume text — it is safe to paste into a public issue.
+- The diagnostics report is built locally and contains no keys, transcripts or imported resume/reference text — it is safe to paste into a public issue.
 
 ## Development
 
@@ -183,7 +183,9 @@ git clone https://github.com/JWM0203/MeetingCopilot.git
 cd MeetingCopilot
 npm install        # postinstall applies patches/ (transformers.js patch — do not remove)
 npm run build      # builds main + preload + renderer into out/
-npm start          # cross-platform; Windows can also use start.bat
+npm start          # starts in the background; closing the terminal keeps it running
+npm stop           # stops the background MeetingCopilot process
+# Windows can also launch it by double-clicking start.bat
 ```
 
 Running from source starts the same first-run wizard as the packaged build. Set `MC_DEV_DEFAULT_LOCAL_ASR=1` to skip it and go straight to the overlay with the local FunASR defaults.

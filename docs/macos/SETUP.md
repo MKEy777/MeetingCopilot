@@ -3,7 +3,7 @@
 [简体中文](SETUP.zh-CN.md) · [Windows guide](../windows/SETUP.md)
 
 The macOS port keeps the whole pipeline — streaming ASR, teleprompter answers,
-resume/JD grounding — but two platform realities differ from Windows:
+resume and second-resume grounding — but two platform realities differ from Windows:
 
 1. **No system loopback capture.** Electron's `audio: 'loopback'` source is
    Windows-only, so on macOS the other-party channel records from a selectable
@@ -32,7 +32,8 @@ git clone https://github.com/JWM0203/MeetingCopilot.git
 cd MeetingCopilot
 npm install        # postinstall applies patches/ (transformers.js patch — do not remove)
 npm run build
-npm start
+npm start          # start in the background
+npm stop           # stop the background process
 ```
 
 ## Audio: route the meeting into MeetingCopilot
@@ -66,6 +67,7 @@ Validated project-local setup on Apple silicon:
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements-funasr.txt
 npm start
+# later, stop it with: npm stop
 ```
 
 The app discovers `.venv` automatically (resolution order: `MC_FUNASR_PYTHON`
@@ -82,7 +84,7 @@ The `Stealth` toggle still applies Electron content protection, and legacy
 capture APIs respect it. However, apps built on modern **ScreenCaptureKit**
 may capture the window anyway — treat stealth as best-effort on macOS. The
 global hotkeys default to **Command+B** (hide/show) and **Command+Shift+S**
-(region-screenshot Q&A).
+(full-screen Q&A).
 
 ## Data locations
 

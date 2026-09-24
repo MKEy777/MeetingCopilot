@@ -86,7 +86,7 @@ Review the summary and click "Enter MeetingCopilot". The wizard writes the whole
 2. Click **▶ Start** in the title bar; the Transcript pane on the left starts filling.
 3. Click **⚡Ans** on one of their lines and the right pane streams an answer written to be read aloud.
 4. Turn on **Auto** in the title bar to let the AI answer by itself — only question-like sentences trigger it.
-5. For answers grounded in your experience, import material with **📄Resume** / **📋JD** (`.md/.txt/.docx/.pdf`). Parsing is local; the text is only sent to the LLM you configured, and only as context for a question you asked.
+5. Import material with **📄Resume** / **📋Second resume** (`.md/.txt/.docx/.pdf`). Use the second resume for interview notes, common questions, technical fundamentals and answer points. Parsing is local; both files are sent to your configured LLM as context when you ask a question, with the second resume preferred.
 
 Other title-bar controls:
 
@@ -115,4 +115,4 @@ The tray menu also has Start/Stop transcription, New session, Settings, Service 
 
 1. Open **Help & guides** in the app (tray menu, or Settings → Help & guides). It works offline.
 2. Read [TROUBLESHOOTING.en.md](TROUBLESHOOTING.en.md) for the full error-code table.
-3. Still stuck: Settings → Advanced → Diagnostics, copy the report (it has no keys, resume text or transcripts) and open an issue at [GitHub Issues](https://github.com/JWM0203/MeetingCopilot/issues).
+3. Still stuck: Settings → Advanced → Diagnostics, copy the report (it has no keys, imported resume/reference text or transcripts) and open an issue at [GitHub Issues](https://github.com/JWM0203/MeetingCopilot/issues).

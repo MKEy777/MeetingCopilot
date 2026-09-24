@@ -23,7 +23,8 @@ git clone https://github.com/JWM0203/MeetingCopilot.git
 cd MeetingCopilot
 npm install        # postinstall 自动应用 patches/（transformers.js 补丁，勿删）
 npm run build
-start.bat          # 或 npm start
+start.bat          # 或 npm start（后台启动）
+npm stop           # 关闭后台运行的程序
 ```
 
 > 🇨🇳 国内 npm / Electron 下载慢时，在项目根目录建 `.npmrc`：
@@ -66,7 +67,7 @@ C:/ProgramData/miniconda3/Scripts/conda.exe run -n moss-asr python -m pip instal
 
 ## 隐身
 
-内容保护（标题栏「隐身」开关，默认开启）让窗口在 Windows 的 OBS、屏幕共享、截图中不可见。全局快捷键默认 **Control+B**（隐藏/呼出）、**Control+Shift+S**（框选截图问答）。
+内容保护（标题栏「隐身」开关，默认开启）让窗口在 Windows 的 OBS、屏幕共享、截图中不可见。全局快捷键默认 **Control+B**（隐藏/呼出）、**Control+Shift+S**（完整屏幕截图问答）。
 
 ## 数据位置
 
