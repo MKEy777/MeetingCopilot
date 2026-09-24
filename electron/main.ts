@@ -141,6 +141,7 @@ function bootstrap(): void {
   let passthroughDownDelivery: Promise<unknown> = Promise.resolve();
   let passthroughWindowDrag: { x: number; y: number } | null = null;
   let passthroughLockedSize: { width: number; height: number } | null = null;
+  let passthroughRestoringSize = false;
 
   function logPassthroughWindow(event: string, details: Record<string, unknown> = {}): void {
     if (!win || win.isDestroyed()) return;
@@ -278,10 +279,13 @@ function bootstrap(): void {
       const point = screen.screenToDipPoint({ x: event.x, y: event.y });
       if (event.type === 'move' && passthroughWindowDrag) {
         const before = target.getBounds();
-        target.setPosition(
-          Math.round(point.x - passthroughWindowDrag.x),
-          Math.round(point.y - passthroughWindowDrag.y),
-        );
+        const size = passthroughLockedSize ?? before;
+        target.setBounds({
+          x: Math.round(point.x - passthroughWindowDrag.x),
+          y: Math.round(point.y - passthroughWindowDrag.y),
+          width: size.width,
+          height: size.height,
+        }, false);
         const after = target.getBounds();
         if (after.width !== before.width || after.height !== before.height) {
           logPassthroughWindow('drag-position-size-changed', { point, before, after });
@@ -501,7 +505,18 @@ function bootstrap(): void {
       event.preventDefault();
     });
     win.on('resize', () => {
-      if (mousePassthrough) logPassthroughWindow('resized', { lockedSize: passthroughLockedSize });
+      if (!mousePassthrough || !passthroughLockedSize || passthroughRestoringSize) return;
+      const bounds = win?.getBounds();
+      if (!bounds) return;
+      logPassthroughWindow('resized', { lockedSize: passthroughLockedSize });
+      if (bounds.width === passthroughLockedSize.width && bounds.height === passthroughLockedSize.height) return;
+      passthroughRestoringSize = true;
+      try {
+        win?.setBounds({ ...bounds, ...passthroughLockedSize }, false);
+        logPassthroughWindow('size-restored', { lockedSize: passthroughLockedSize });
+      } finally {
+        passthroughRestoringSize = false;
+      }
     });
     win.on('move', () => {
       if (!mousePassthrough || !passthroughLockedSize) return;
