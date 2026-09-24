@@ -13,7 +13,9 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "start": "electron-vite preview",
+    "start": "node tools/app-control.mjs start",
+    "start:foreground": "electron-vite preview",
+    "stop": "node tools/app-control.mjs stop",
     "postinstall": "patch-package",
     "test": "vitest run",
     "test:python": "node tools/run-python-tests.mjs",
