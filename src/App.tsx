@@ -512,7 +512,7 @@ export function App() {
     });
     const onInputEvent = (event: Event) => {
       const element = event.target instanceof Element ? event.target : null;
-      const target = element?.closest('button, input, select, textarea, [role="button"], a') ?? element;
+      const target = element?.closest('button, input, select, textarea, summary, [role="button"], a') ?? element;
       const mouse = event instanceof MouseEvent ? event : undefined;
       const pointer = event instanceof PointerEvent ? event : undefined;
       window.mc.debugUiInput({
@@ -531,8 +531,9 @@ export function App() {
       document.addEventListener(type, onInputEvent, false);
     }
 
-    const isTextControl = (target: EventTarget | null): boolean => {
+    const isFocusManagedControl = (target: EventTarget | null): boolean => {
       if (target instanceof HTMLTextAreaElement) return true;
+      if (target instanceof HTMLSelectElement) return true;
       if (target instanceof HTMLInputElement) {
         return !['button', 'checkbox', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(
           target.type,
@@ -543,7 +544,7 @@ export function App() {
 
     const restoreOverlayBehavior = (force = false) => {
       window.setTimeout(() => {
-        if (force || !isTextControl(document.activeElement)) {
+        if (force || !isFocusManagedControl(document.activeElement)) {
           void window.mc.setWindowFocusable(false);
         }
       }, 0);
@@ -553,7 +554,7 @@ export function App() {
       if (event.isTrusted && event.pointerType === 'mouse' && event.button === 0) {
         observedPointerDowns.add(event.pointerId);
       }
-      if (!isTextControl(event.target)) return;
+      if (!isFocusManagedControl(event.target)) return;
       const target = event.target as HTMLElement;
       // Keep the browser's normal click/caret placement, then explicitly
       // focus the control after the native window accepts focus again.
@@ -581,7 +582,7 @@ export function App() {
 
       const element = event.target instanceof Element ? event.target : null;
       const target = element?.closest<HTMLElement>(
-        'button, input, select, textarea, [role="button"], a, [contenteditable="true"]',
+        'button, input, select, textarea, summary, [role="button"], a, [contenteditable="true"]',
       );
       if (!target || target.getAttribute('aria-disabled') === 'true') return;
       if (
@@ -589,7 +590,7 @@ export function App() {
         target.disabled
       ) return;
 
-      if (isTextControl(target)) {
+      if (isFocusManagedControl(target)) {
         void window.mc.setWindowFocusable(true).then(() => {
           if (document.contains(target)) target.focus();
         });

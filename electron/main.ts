@@ -14,6 +14,7 @@ import {
   screen,
   session,
   shell,
+  type OpenDialogOptions,
 } from 'electron';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { release } from 'os';
@@ -1084,12 +1085,28 @@ function bootstrap(): void {
       knowledge.clear();
       return { chars: knowledge.chars };
     });
-    ipcMain.handle(IPC.knowledgePick, async (_e, slot: 'resume' | 'secondResume' = 'resume') => {
-      const r = await dialog.showOpenDialog({
-        title: slot === 'secondResume' ? T().pickSecondResumeTitle : T().pickResumeTitle,
-        filters: [{ name: T().docFilter, extensions: [...DOC_EXTENSIONS] }],
-        properties: ['openFile'],
-      });
+    ipcMain.handle(IPC.knowledgePick, async (event, slot: 'resume' | 'secondResume' = 'resume') => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const restoreAlwaysOnTop = owner?.isAlwaysOnTop() ?? false;
+      // The main UI is an always-on-top, non-activating overlay. A parentless
+      // native file picker can open behind it, so temporarily lower the owner
+      // and open the picker as its modal child.
+      if (restoreAlwaysOnTop) owner?.setAlwaysOnTop(false);
+      let r: Awaited<ReturnType<typeof dialog.showOpenDialog>>;
+      try {
+        const options: OpenDialogOptions = {
+          title: slot === 'secondResume' ? T().pickSecondResumeTitle : T().pickResumeTitle,
+          filters: [{ name: T().docFilter, extensions: [...DOC_EXTENSIONS] }],
+          properties: ['openFile'],
+        };
+        r = owner
+          ? await dialog.showOpenDialog(owner, options)
+          : await dialog.showOpenDialog(options);
+      } finally {
+        if (restoreAlwaysOnTop && owner && !owner.isDestroyed()) {
+          owner.setAlwaysOnTop(true, 'screen-saver');
+        }
+      }
       if (r.canceled || !r.filePaths[0]) return null;
       try {
         // deterministic parse (mammoth / pdf-parse) — no LLM in the loop;
