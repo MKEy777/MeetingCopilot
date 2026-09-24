@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import type {
   AnswerLang,
   AsrEvent,
@@ -23,13 +32,14 @@ import { shouldSynthesizeMouseClick } from '../shared/uiInteractionFallback';
 import { LoopbackCapture } from './audio/loopbackCapture';
 import { MicCapture, listMics } from './audio/micCapture';
 import { TranscriptPanel } from './components/TranscriptPanel';
+import { ScriptPanel } from './components/ScriptPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ServiceHealthPanel } from './components/ServiceHealthPanel';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { HelpPanel } from './components/HelpPanel';
 import { StatusBar } from './components/StatusBar';
 import { AnswerSession, type AnswerTurn } from './components/AnswerSession';
-import { I18nProvider, getDict, type Dict } from './i18n';
+import { I18nProvider, getDict, useT, type Dict } from './i18n';
 
 export interface AsrUiState {
   phase: 'loading' | 'ready' | 'error';
@@ -66,6 +76,62 @@ function deriveName(text: string, fallback: string): string {
   return t.length > 14 ? t.slice(0, 14) + '…' : t;
 }
 
+type PaneId = 'script' | 'transcript' | 'answer';
+type PaneWeights = Record<PaneId, number>;
+
+const MIN_RESIZED_PANE_WIDTH = 140;
+
+function collapseWeight(weights: PaneWeights, id: PaneId, remaining: PaneId[]): PaneWeights {
+  const next = { ...weights, [id]: 0 };
+  const share = weights[id] / remaining.length;
+  for (const pane of remaining) next[pane] += share;
+  return next;
+}
+
+function expandWeight(weights: PaneWeights, id: PaneId, expanded: PaneId[]): PaneWeights {
+  const next = { ...weights };
+  const newShare = 1 / (expanded.length + 1);
+  const oldTotal = expanded.reduce((sum, pane) => sum + weights[pane], 0);
+  for (const pane of expanded) {
+    next[pane] = oldTotal > 0 ? (weights[pane] / oldTotal) * (1 - newShare) : newShare;
+  }
+  next[id] = newShare;
+  return next;
+}
+
+function PaneSlot({
+  id,
+  label,
+  collapsed,
+  weight,
+  onExpand,
+  children,
+}: {
+  id: PaneId;
+  label: string;
+  collapsed: boolean;
+  weight: number;
+  onExpand: () => void;
+  children: ReactNode;
+}) {
+  const t = useT();
+  return (
+    <div
+      className={`pane-slot${collapsed ? ' pane-slot-collapsed' : ''}`}
+      data-pane-id={id}
+      style={collapsed ? undefined : { flexGrow: weight }}
+    >
+      {collapsed && (
+        <button className="pane-rail" onClick={onExpand} title={t.layout.expand(label)} aria-label={t.layout.expand(label)}>
+          <span>›</span>
+          <span>{label}</span>
+        </button>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export function App() {
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [asr, setAsr] = useState<AsrUiState>({ phase: 'loading', workerState: 'loading' });
@@ -77,6 +143,16 @@ export function App() {
   const [showHud, setShowHud] = useState(true);
   const [hud, setHud] = useState<HudStats>({ count: 0 });
   const [continuous, setContinuous] = useState(false);
+  const [scriptEnabled, setScriptEnabled] = useState(false);
+  const [scriptText, setScriptText] = useState('');
+  const [scriptEditing, setScriptEditing] = useState(false);
+  const [collapsedPanes, setCollapsedPanes] = useState<Record<PaneId, boolean>>({
+    script: false,
+    transcript: false,
+    answer: false,
+  });
+  const [paneWeights, setPaneWeights] = useState<PaneWeights>({ script: 0, transcript: 0.5, answer: 0.5 });
+  const [resizingPanes, setResizingPanes] = useState(false);
   const [mics, setMics] = useState<{ deviceId: string; label: string }[]>([]);
   const [micActive, setMicActive] = useState(false);
   const [partials, setPartials] = useState<{ them?: string; me?: string }>({});
@@ -93,11 +169,192 @@ export function App() {
   const currentIdRef = useRef<string>('');
   const answerLangRef = useRef<AnswerLang>('chinese');
   const loaded = useRef(false);
+  const panesRef = useRef<HTMLDivElement>(null);
+  const resizeRef = useRef<{
+    pointerId: number;
+    left: PaneId;
+    right: PaneId;
+    startX: number;
+    leftWidth: number;
+    rightWidth: number;
+    leftWeight: number;
+    rightWeight: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const cancelResize = () => {
+      resizeRef.current = null;
+      setResizingPanes(false);
+    };
+    window.addEventListener('blur', cancelResize);
+    return () => window.removeEventListener('blur', cancelResize);
+  }, []);
 
   // UI language: settings-driven; ref mirror so stable callbacks stay fresh
   const t = getDict(settings?.ui.lang);
   const tRef = useRef<Dict>(t);
   tRef.current = t;
+
+  const visiblePanes: PaneId[] = scriptEnabled
+    ? ['script', 'transcript', 'answer']
+    : ['transcript', 'answer'];
+  const expandedPanes = visiblePanes.filter((id) => !collapsedPanes[id]);
+  const expandedCount = expandedPanes.length;
+
+  const resizePair = (
+    left: PaneId,
+    right: PaneId,
+    leftWidth: number,
+    rightWidth: number,
+    leftWeight: number,
+    rightWeight: number,
+    deltaX: number,
+  ) => {
+    const totalWidth = leftWidth + rightWidth;
+    if (totalWidth <= 0) return;
+    const minWidth = Math.min(MIN_RESIZED_PANE_WIDTH, totalWidth / 2);
+    const nextLeftWidth = Math.max(minWidth, Math.min(totalWidth - minWidth, leftWidth + deltaX));
+    const combinedWeight = leftWeight + rightWeight;
+    const nextLeftWeight = (nextLeftWidth / totalWidth) * combinedWeight;
+    setPaneWeights((current) => ({
+      ...current,
+      [left]: nextLeftWeight,
+      [right]: combinedWeight - nextLeftWeight,
+    }));
+  };
+
+  const startResize = (left: PaneId, right: PaneId, event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const leftSlot = panesRef.current?.querySelector<HTMLElement>(`[data-pane-id="${left}"]`);
+    const rightSlot = panesRef.current?.querySelector<HTMLElement>(`[data-pane-id="${right}"]`);
+    if (!leftSlot || !rightSlot) return;
+    event.preventDefault();
+    resizeRef.current = {
+      pointerId: event.pointerId,
+      left,
+      right,
+      startX: event.clientX,
+      leftWidth: leftSlot.getBoundingClientRect().width,
+      rightWidth: rightSlot.getBoundingClientRect().width,
+      leftWeight: paneWeights[left],
+      rightWeight: paneWeights[right],
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResizingPanes(true);
+  };
+
+  const moveResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = resizeRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    resizePair(
+      drag.left,
+      drag.right,
+      drag.leftWidth,
+      drag.rightWidth,
+      drag.leftWeight,
+      drag.rightWeight,
+      event.clientX - drag.startX,
+    );
+  };
+
+  const stopResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (resizeRef.current?.pointerId !== event.pointerId) return;
+    resizeRef.current = null;
+    setResizingPanes(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const resizeWithKeyboard = (left: PaneId, right: PaneId, event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const leftSlot = panesRef.current?.querySelector<HTMLElement>(`[data-pane-id="${left}"]`);
+    const rightSlot = panesRef.current?.querySelector<HTMLElement>(`[data-pane-id="${right}"]`);
+    if (!leftSlot || !rightSlot) return;
+    event.preventDefault();
+    resizePair(
+      left,
+      right,
+      leftSlot.getBoundingClientRect().width,
+      rightSlot.getBoundingClientRect().width,
+      paneWeights[left],
+      paneWeights[right],
+      event.key === 'ArrowRight' ? 24 : -24,
+    );
+  };
+
+  const splitterAfter = (left: PaneId) => {
+    const index = expandedPanes.indexOf(left);
+    if (index < 0 || index === expandedPanes.length - 1) return null;
+    const right = expandedPanes[index + 1];
+    const labels: Record<PaneId, string> = {
+      script: t.script.title,
+      transcript: t.transcript.title,
+      answer: t.answer.panelTitle,
+    };
+    return (
+      <div
+        key={`split-${left}-${right}`}
+        className="pane-splitter"
+        role="separator"
+        tabIndex={0}
+        aria-orientation="vertical"
+        aria-label={t.layout.resize(labels[left], labels[right])}
+        title={t.layout.resize(labels[left], labels[right])}
+        onPointerDown={(event) => startResize(left, right, event)}
+        onPointerMove={moveResize}
+        onPointerUp={stopResize}
+        onPointerCancel={stopResize}
+        onLostPointerCapture={() => {
+          resizeRef.current = null;
+          setResizingPanes(false);
+        }}
+        onKeyDown={(event) => resizeWithKeyboard(left, right, event)}
+      />
+    );
+  };
+
+  const togglePane = (id: PaneId) => {
+    if (!collapsedPanes[id] && expandedCount <= 1) return;
+    if (id === 'script' && scriptEditing) {
+      setScriptEditing(false);
+      void window.mc.setWindowFocusable(false);
+    }
+    if (collapsedPanes[id]) {
+      setPaneWeights((current) => expandWeight(current, id, expandedPanes));
+    } else {
+      setPaneWeights((current) => collapseWeight(current, id, expandedPanes.filter((pane) => pane !== id)));
+    }
+    setCollapsedPanes((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleScript = () => {
+    if (scriptEnabled) {
+      setScriptEditing(false);
+      void window.mc.setWindowFocusable(false);
+      const remaining = expandedPanes.filter((id) => id !== 'script');
+      if (remaining.length === 0) {
+        setCollapsedPanes((prev) => ({ ...prev, answer: false }));
+      }
+      if (!collapsedPanes.script) {
+        setPaneWeights((current) => collapseWeight(current, 'script', remaining.length ? remaining : ['answer']));
+      }
+      setScriptEnabled(false);
+    } else {
+      setPaneWeights((current) => expandWeight(current, 'script', expandedPanes));
+      setCollapsedPanes((prev) => ({ ...prev, script: false }));
+      setScriptEnabled(true);
+    }
+  };
+
+  const editScript = () => {
+    void window.mc.setWindowFocusable(true).then(() => setScriptEditing(true));
+  };
+
+  const finishScriptEdit = () => {
+    setScriptEditing(false);
+    void window.mc.setWindowFocusable(false);
+  };
 
   if (!loopbackRef.current) loopbackRef.current = new LoopbackCapture();
   if (!themInputRef.current) themInputRef.current = new MicCapture();
@@ -891,6 +1148,14 @@ export function App() {
             {t.titlebar.continuous}
           </button>
           <button
+            className={scriptEnabled ? 'btn btn-on' : 'btn'}
+            onClick={toggleScript}
+            title={t.titlebar.scriptTitle}
+            aria-pressed={scriptEnabled}
+          >
+            {t.titlebar.script(scriptEnabled)}
+          </button>
+          <button
             className={settings?.llm.answerWithVision ? 'btn btn-on' : 'btn'}
             onClick={() => void toggleAnswerModel()}
             title={t.titlebar.modelTitle}
@@ -1020,39 +1285,81 @@ export function App() {
         />
       )}
 
-      <div className="panes">
-        <TranscriptPanel
-          segments={segments}
-          partials={partials}
-          answersReady={answersReady}
-          answersHint={t.health.answersDisabled}
-          onAsk={(text) => askLlm('segment', text)}
-          onTranslate={translateSegment}
-          onClear={clearTranscript}
-        />
-        <AnswerSession
-          sessions={sessions}
-          currentId={currentId}
-          turns={current?.turns ?? []}
-          resumeName={current?.resumeName}
-          resumeChars={current?.resumeText?.length ?? 0}
-          secondResumeName={current?.secondResumeName}
-          secondResumeChars={current?.secondResumeText?.length ?? 0}
-          notice={kbNotice}
-          visionReady={visionReady}
-          answersReady={answersReady}
-          answersHint={t.health.answersDisabled}
-          onSwitch={setCurrentId}
-          onNew={createSession}
-          onDelete={deleteSession}
-          onRename={renameSession}
-          onPickKb={(slot) => void pickKb(slot)}
-          onClearKb={clearKb}
-          onCancel={cancelTurn}
-          onClear={() => patchSession(currentIdRef.current, (s) => ({ ...s, turns: [] }))}
-          onFreeAsk={(q) => askLlm('free', q)}
-          onShotAsk={askShot}
-        />
+      <div className={`panes${resizingPanes ? ' panes-resizing' : ''}`} ref={panesRef}>
+        {scriptEnabled && (
+          <PaneSlot
+            id="script"
+            label={t.script.title}
+            collapsed={collapsedPanes.script}
+            weight={paneWeights.script}
+            onExpand={() => togglePane('script')}
+          >
+            <ScriptPanel
+              text={scriptText}
+              editing={scriptEditing}
+              canCollapse={expandedCount > 1}
+              onTextChange={setScriptText}
+              onEdit={editScript}
+              onDone={finishScriptEdit}
+              onCollapse={() => togglePane('script')}
+            />
+          </PaneSlot>
+        )}
+        {scriptEnabled && splitterAfter('script')}
+        <PaneSlot
+          id="transcript"
+          label={t.transcript.title}
+          collapsed={collapsedPanes.transcript}
+          weight={paneWeights.transcript}
+          onExpand={() => togglePane('transcript')}
+        >
+          <TranscriptPanel
+            segments={segments}
+            partials={partials}
+            answersReady={answersReady}
+            answersHint={t.health.answersDisabled}
+            onAsk={(text) => askLlm('segment', text)}
+            onTranslate={translateSegment}
+            onClear={clearTranscript}
+            collapsed={collapsedPanes.transcript}
+            canCollapse={expandedCount > 1}
+            onCollapse={() => togglePane('transcript')}
+          />
+        </PaneSlot>
+        {splitterAfter('transcript')}
+        <PaneSlot
+          id="answer"
+          label={t.answer.panelTitle}
+          collapsed={collapsedPanes.answer}
+          weight={paneWeights.answer}
+          onExpand={() => togglePane('answer')}
+        >
+          <AnswerSession
+            sessions={sessions}
+            currentId={currentId}
+            turns={current?.turns ?? []}
+            resumeName={current?.resumeName}
+            resumeChars={current?.resumeText?.length ?? 0}
+            secondResumeName={current?.secondResumeName}
+            secondResumeChars={current?.secondResumeText?.length ?? 0}
+            notice={kbNotice}
+            visionReady={visionReady}
+            answersReady={answersReady}
+            answersHint={t.health.answersDisabled}
+            onSwitch={setCurrentId}
+            onNew={createSession}
+            onDelete={deleteSession}
+            onRename={renameSession}
+            onPickKb={(slot) => void pickKb(slot)}
+            onClearKb={clearKb}
+            onCancel={cancelTurn}
+            onClear={() => patchSession(currentIdRef.current, (s) => ({ ...s, turns: [] }))}
+            onFreeAsk={(q) => askLlm('free', q)}
+            onShotAsk={askShot}
+            canCollapse={expandedCount > 1}
+            onCollapse={() => togglePane('answer')}
+          />
+        </PaneSlot>
       </div>
 
       <StatusBar

@@ -43,6 +43,8 @@ const zh = {
     themDeviceDefault: '默认输入',
     continuous: '持续答',
     continuousTitle: '持续模式：对方提问时自动追加一条回答建议（只在像问题时触发）',
+    script: (on: boolean) => `稿子${on ? '开' : '关'}`,
+    scriptTitle: '显示或隐藏会议稿子区（文字只在本次运行中保留）',
     vision: '多模态',
     textOnly: '纯文本',
     modelTitle: '回答用的模型：纯文本大模型（快） ⇄ 多模态模型（可截图问答）',
@@ -60,6 +62,20 @@ const zh = {
     settingsTitle: '设置',
     hideTitle: '隐藏窗口（快捷键再次呼出）',
     quitTitle: '退出',
+  },
+  layout: {
+    collapse: (name: string) => `收起${name}`,
+    expand: (name: string) => `展开${name}`,
+    resize: (left: string, right: string) => `拖动调整${left}与${right}的宽度；也可用左右方向键`,
+    keepOneOpen: '至少保留一个展开的区域',
+  },
+  script: {
+    title: '📃 稿子',
+    edit: '编辑',
+    done: '完成',
+    editorLabel: '会议稿子编辑区',
+    placeholder: '在这里粘贴会议稿子…',
+    empty: '点「编辑」粘贴稿子，完成后可在这里滚动阅读。',
   },
   transcript: {
     title: '📝 转录',
@@ -82,6 +98,7 @@ const zh = {
     answerSelection: '⚡回答选中',
   },
   answer: {
+    panelTitle: 'AI 回答',
     kindTag: {
       segment: '答',
       continuous: '持续',
@@ -465,6 +482,8 @@ const en: Dict = {
     continuous: 'Auto',
     continuousTitle:
       'Continuous mode: auto-append an answer suggestion whenever the other party asks something question-like',
+    script: (on: boolean) => `Script:${on ? 'On' : 'Off'}`,
+    scriptTitle: 'Show or hide the meeting script (text is kept only until the app quits)',
     vision: 'Vision',
     textOnly: 'Text',
     modelTitle: 'Answering model: text-only LLM (fast) ⇄ multimodal model (screenshot Q&A)',
@@ -484,6 +503,20 @@ const en: Dict = {
     settingsTitle: 'Settings',
     hideTitle: 'Hide window (press the hotkey to bring it back)',
     quitTitle: 'Quit',
+  },
+  layout: {
+    collapse: (name: string) => `Collapse ${name}`,
+    expand: (name: string) => `Expand ${name}`,
+    resize: (left: string, right: string) => `Drag to resize ${left} and ${right}; arrow keys also work`,
+    keepOneOpen: 'Keep at least one panel expanded',
+  },
+  script: {
+    title: '📃 Script',
+    edit: 'Edit',
+    done: 'Done',
+    editorLabel: 'Meeting script editor',
+    placeholder: 'Paste your meeting script here…',
+    empty: 'Click Edit to paste a script, then scroll here to read it.',
   },
   transcript: {
     title: '📝 Transcript',
@@ -506,6 +539,7 @@ const en: Dict = {
     answerSelection: '⚡ Answer selection',
   },
   answer: {
+    panelTitle: 'AI answers',
     kindTag: {
       segment: 'Ans',
       continuous: 'Auto',

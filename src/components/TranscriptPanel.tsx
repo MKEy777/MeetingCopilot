@@ -24,6 +24,9 @@ export function TranscriptPanel({
   onAsk,
   onTranslate,
   onClear,
+  collapsed,
+  canCollapse,
+  onCollapse,
 }: {
   segments: TranscriptSegment[];
   partials?: { them?: string; me?: string };
@@ -33,6 +36,9 @@ export function TranscriptPanel({
   onAsk: (text: string) => void;
   onTranslate: (seg: TranscriptSegment) => void;
   onClear: () => void;
+  collapsed: boolean;
+  canCollapse: boolean;
+  onCollapse: () => void;
 }) {
   const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -40,8 +46,8 @@ export function TranscriptPanel({
   const [sel, setSel] = useState<SelPopup | null>(null);
 
   useEffect(() => {
-    if (stick && boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
-  }, [segments, stick]);
+    if (!collapsed && stick && boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
+  }, [segments, stick, collapsed]);
 
   const onScroll = () => {
     const el = boxRef.current;
@@ -77,6 +83,15 @@ export function TranscriptPanel({
         <span className="pane-hint">{t.transcript.hint}</span>
         <button className="btn btn-sm" onClick={onClear} title={t.transcript.clearTitle}>
           {t.transcript.clear}
+        </button>
+        <button
+          className="btn btn-sm pane-collapse"
+          onClick={onCollapse}
+          disabled={!canCollapse}
+          title={canCollapse ? t.layout.collapse(t.transcript.title) : t.layout.keepOneOpen}
+          aria-label={t.layout.collapse(t.transcript.title)}
+        >
+          ‹
         </button>
       </header>
       <div className="transcript" ref={boxRef} onScroll={onScroll} onMouseUp={captureSelection}>

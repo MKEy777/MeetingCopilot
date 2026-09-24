@@ -41,6 +41,8 @@ export function AnswerSession({
   onClear,
   onFreeAsk,
   onShotAsk,
+  canCollapse,
+  onCollapse,
 }: {
   sessions: StoredSession[];
   currentId: string;
@@ -65,6 +67,8 @@ export function AnswerSession({
   onClear: () => void;
   onFreeAsk: (question: string) => void;
   onShotAsk: (question: string, imageDataUrl?: string) => void;
+  canCollapse: boolean;
+  onCollapse: () => void;
 }) {
   const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -94,6 +98,15 @@ export function AnswerSession({
   return (
     <section className="pane pane-answer">
       <header className="pane-head session-bar">
+        <button
+          className="btn btn-sm pane-collapse"
+          onClick={onCollapse}
+          disabled={!canCollapse}
+          title={canCollapse ? t.layout.collapse(t.answer.panelTitle) : t.layout.keepOneOpen}
+          aria-label={t.layout.collapse(t.answer.panelTitle)}
+        >
+          ‹
+        </button>
         {editing ? (
           <input
             className="session-select"
