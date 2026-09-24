@@ -41,6 +41,20 @@ export interface UiNativeMouseActivation {
   at: number;
 }
 
+/** Physical Windows mouse input mirrored into the click-through overlay. */
+export interface PassthroughMouseEvent {
+  type: 'move' | 'down' | 'up' | 'wheel';
+  /** Window-relative DIP coordinates. */
+  x: number;
+  y: number;
+  delta?: number;
+}
+
+export interface PassthroughMouseState {
+  enabled: boolean;
+  failed?: boolean;
+}
+
 /** outcome of a provider connection test (Phase 3 runs them; the settings
  * schema stores the last result so the UI can show it after a restart) */
 export type ProviderTestCode =
@@ -551,6 +565,14 @@ export const IPC = {
   stealthSet: 'stealth:set',
   /** invoke: (boolean) => boolean — temporarily enables main-window focus for text editing */
   windowFocusableSet: 'window:focusable-set',
+  /** invoke: (boolean) => boolean; Windows click-through mode for this run */
+  mousePassthroughSet: 'window:mouse-passthrough-set',
+  /** main -> renderer: physical mouse input while click-through is enabled */
+  mousePassthroughEvent: 'window:mouse-passthrough-event',
+  /** main -> renderer: mode state, including unexpected helper exit */
+  mousePassthroughState: 'window:mouse-passthrough-state',
+  /** renderer -> main: begin moving the click-through window by its title bar */
+  mousePassthroughDragStart: 'window:mouse-passthrough-drag-start',
   /** send: sanitized renderer pointer events for diagnosing overlay clicks */
   uiInputDebug: 'debug:ui-input',
   /** main -> renderer: a Windows click began on an inactive overlay */

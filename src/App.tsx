@@ -14,6 +14,7 @@ import type {
   KbSlot,
   LlmAskPayload,
   PublicSettings,
+  PassthroughMouseEvent,
   StoredSession,
 } from '../shared/protocol';
 import { APP_DISPLAY_NAME } from '../shared/appIdentity';
@@ -153,6 +154,9 @@ export function App() {
   });
   const [paneWeights, setPaneWeights] = useState<PaneWeights>({ script: 0, transcript: 0.5, answer: 0.5 });
   const [resizingPanes, setResizingPanes] = useState(false);
+  const [mousePassthrough, setMousePassthrough] = useState(false);
+  const [passthroughBusy, setPassthroughBusy] = useState(false);
+  const [passthroughError, setPassthroughError] = useState(false);
   const [mics, setMics] = useState<{ deviceId: string; label: string }[]>([]);
   const [micActive, setMicActive] = useState(false);
   const [partials, setPartials] = useState<{ them?: string; me?: string }>({});
@@ -180,6 +184,9 @@ export function App() {
     leftWeight: number;
     rightWeight: number;
   } | null>(null);
+  const virtualDownRef = useRef<HTMLElement | null>(null);
+  const virtualHoverRef = useRef<HTMLElement | null>(null);
+  const virtualDragRef = useRef<NonNullable<typeof resizeRef.current> | null>(null);
 
   useEffect(() => {
     const cancelResize = () => {
@@ -189,6 +196,118 @@ export function App() {
     window.addEventListener('blur', cancelResize);
     return () => window.removeEventListener('blur', cancelResize);
   }, []);
+
+  // When the OS window ignores mouse input, a Windows helper observes the
+  // same physical mouse without consuming it. Hit-test our DOM at the reported
+  // position and execute the matching action while the webpage below receives
+  // the original event. This only runs while passthrough is enabled.
+  useEffect(() => {
+    const actionAt = (x: number, y: number): HTMLElement | null => {
+      const element = document.elementFromPoint(x, y);
+      return element?.closest<HTMLElement>(
+        'button, a, input, select, textarea, [role="button"], .bubble',
+      ) ?? null;
+    };
+    const scrollAt = (x: number, y: number, delta: number) => {
+      let element = document.elementFromPoint(x, y);
+      while (element instanceof HTMLElement) {
+        const style = getComputedStyle(element);
+        if (element.scrollHeight > element.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
+          element.scrollTop -= (delta / 120) * 88;
+          return;
+        }
+        element = element.parentElement;
+      }
+    };
+    const handle = (event: PassthroughMouseEvent) => {
+      const { x, y } = event;
+      if (event.type === 'move') {
+        const hovered = actionAt(x, y);
+        if (virtualHoverRef.current !== hovered) {
+          virtualHoverRef.current?.classList.remove('passthrough-hover');
+          hovered?.classList.add('passthrough-hover');
+          virtualHoverRef.current = hovered;
+        }
+        const drag = virtualDragRef.current;
+        if (drag) {
+          resizePair(drag.left, drag.right, drag.leftWidth, drag.rightWidth,
+            drag.leftWeight, drag.rightWeight, x - drag.startX);
+        }
+        return;
+      }
+      if (event.type === 'wheel') {
+        if (event.delta) scrollAt(x, y, event.delta);
+        return;
+      }
+      if (event.type === 'down') {
+        const element = document.elementFromPoint(x, y);
+        const splitter = element?.closest<HTMLElement>('.pane-splitter');
+        if (splitter) {
+          const leftSlot = splitter.previousElementSibling as HTMLElement | null;
+          const rightSlot = splitter.nextElementSibling as HTMLElement | null;
+          const left = leftSlot?.dataset.paneId as PaneId | undefined;
+          const right = rightSlot?.dataset.paneId as PaneId | undefined;
+          if (left && right) {
+            virtualDragRef.current = {
+              pointerId: -1, left, right, startX: x,
+              leftWidth: leftSlot!.getBoundingClientRect().width,
+              rightWidth: rightSlot!.getBoundingClientRect().width,
+              leftWeight: paneWeights[left], rightWeight: paneWeights[right],
+            };
+            setResizingPanes(true);
+          }
+          virtualDownRef.current = null;
+        } else {
+          virtualDownRef.current = actionAt(x, y);
+          if (!virtualDownRef.current && element?.closest('.titlebar')) {
+            window.mc.beginMousePassthroughDrag(x, y);
+          }
+        }
+        return;
+      }
+      if (virtualDragRef.current) {
+        virtualDragRef.current = null;
+        setResizingPanes(false);
+        return;
+      }
+      const target = actionAt(x, y);
+      const pressed = virtualDownRef.current;
+      virtualDownRef.current = null;
+      if (!target || target !== pressed || target.getAttribute('aria-disabled') === 'true') return;
+      if ('disabled' in target && target.disabled) return;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement) {
+        const editable = target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement ||
+          (target instanceof HTMLInputElement && !['button', 'checkbox', 'file', 'radio', 'submit'].includes(target.type));
+        if (editable) {
+          void window.mc.setWindowFocusable(true).then(() => target.focus());
+          return;
+        }
+      }
+      target.click();
+    };
+    const bridge = window as typeof window & { __mcHandlePassthroughMouse?: (event: PassthroughMouseEvent) => void };
+    bridge.__mcHandlePassthroughMouse = handle;
+    const offMouse = window.mc.onMousePassthroughEvent(handle);
+    return () => {
+      offMouse();
+      delete bridge.__mcHandlePassthroughMouse;
+      virtualHoverRef.current?.classList.remove('passthrough-hover');
+      virtualHoverRef.current = null;
+    };
+  }, [paneWeights]);
+
+  useEffect(() => window.mc.onMousePassthroughState((state) => {
+    setMousePassthrough(state.enabled);
+    setPassthroughError(!!state.failed);
+    if (!state.enabled) {
+      virtualDownRef.current = null;
+      virtualDragRef.current = null;
+      virtualHoverRef.current?.classList.remove('passthrough-hover');
+      virtualHoverRef.current = null;
+      setResizingPanes(false);
+    }
+  }), []);
 
   // UI language: settings-driven; ref mirror so stable callbacks stay fresh
   const t = getDict(settings?.ui.lang);
@@ -354,6 +473,23 @@ export function App() {
   const finishScriptEdit = () => {
     setScriptEditing(false);
     void window.mc.setWindowFocusable(false);
+  };
+
+  const toggleMousePassthrough = async () => {
+    if (passthroughBusy) return;
+    setPassthroughBusy(true);
+    setPassthroughError(false);
+    try {
+      const on = await window.mc.setMousePassthrough(!mousePassthrough);
+      setMousePassthrough(on);
+      if (!on && !mousePassthrough) setPassthroughError(true);
+    } catch (error) {
+      console.warn('[mouse-passthrough] activation failed:', error);
+      setMousePassthrough(false);
+      setPassthroughError(true);
+    } finally {
+      setPassthroughBusy(false);
+    }
   };
 
   if (!loopbackRef.current) loopbackRef.current = new LoopbackCapture();
@@ -1198,6 +1334,15 @@ export function App() {
           >
             {t.titlebar.stealth(!!settings?.ui.stealth)}
           </button>
+          <button
+            className={mousePassthrough ? 'btn btn-on' : 'btn'}
+            onClick={() => void toggleMousePassthrough()}
+            disabled={passthroughBusy || window.mc.platform !== 'win32'}
+            title={window.mc.platform === 'win32' ? t.titlebar.passthroughTitle : t.titlebar.passthroughUnsupported}
+            aria-pressed={mousePassthrough}
+          >
+            {t.titlebar.passthrough(mousePassthrough)}
+          </button>
           <button className="btn" onClick={() => setShowHud((v) => !v)} title={t.titlebar.hudTitle}>
             HUD
           </button>
@@ -1212,6 +1357,8 @@ export function App() {
           </button>
         </div>
       </header>
+
+      {passthroughError && <div className="passthrough-error" role="alert">{t.titlebar.passthroughFailed}</div>}
 
       {/* grandfathered users (settings.json predates the wizard) get one
           dismissible pointer at the new wizard; wizard-created profiles never

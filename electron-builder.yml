@@ -53,6 +53,7 @@ extraResources:
       - funasr_device.py
       - moss_asr_server.py
       - moss_asr_utils.py
+      - mouse_passthrough.ps1
   - from: requirements-funasr.txt
     to: requirements-funasr.txt
   - from: requirements-moss.txt

@@ -16,6 +16,8 @@ import {
   type TrayCommandPayload,
   type UiInputDebugEvent,
   type UiNativeMouseActivation,
+  type PassthroughMouseEvent,
+  type PassthroughMouseState,
 } from '../shared/protocol';
 
 export interface McApi {
@@ -37,6 +39,10 @@ export interface McApi {
   setStealth(on: boolean): Promise<boolean>;
   /** Enable focus only while the user is editing a text control. */
   setWindowFocusable(on: boolean): Promise<boolean>;
+  setMousePassthrough(on: boolean): Promise<boolean>;
+  onMousePassthroughEvent(cb: (event: PassthroughMouseEvent) => void): () => void;
+  onMousePassthroughState(cb: (state: PassthroughMouseState) => void): () => void;
+  beginMousePassthroughDrag(x: number, y: number): void;
   /** Temporary click diagnostics. Payload contains no control text or values. */
   debugUiInput(event: UiInputDebugEvent): void;
   /** Observe non-activating Windows clicks for the renderer's targeted fallback. */
@@ -100,6 +106,18 @@ const api: McApi = {
   saveSessions: (data) => ipcRenderer.send(IPC.sessionsSave, data),
   setStealth: (on) => ipcRenderer.invoke(IPC.stealthSet, on),
   setWindowFocusable: (on) => ipcRenderer.invoke(IPC.windowFocusableSet, on),
+  setMousePassthrough: (on) => ipcRenderer.invoke(IPC.mousePassthroughSet, on),
+  onMousePassthroughEvent: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, event: PassthroughMouseEvent) => cb(event);
+    ipcRenderer.on(IPC.mousePassthroughEvent, listener);
+    return () => ipcRenderer.removeListener(IPC.mousePassthroughEvent, listener);
+  },
+  onMousePassthroughState: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, state: PassthroughMouseState) => cb(state);
+    ipcRenderer.on(IPC.mousePassthroughState, listener);
+    return () => ipcRenderer.removeListener(IPC.mousePassthroughState, listener);
+  },
+  beginMousePassthroughDrag: (x, y) => ipcRenderer.send(IPC.mousePassthroughDragStart, { x, y }),
   debugUiInput: (event) => ipcRenderer.send(IPC.uiInputDebug, event),
   onUiNativeMouseActivation: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, event: UiNativeMouseActivation) => cb(event);

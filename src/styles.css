@@ -264,6 +264,18 @@ body {
   color: #fff;
 }
 
+.passthrough-hover {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.passthrough-error {
+  padding: 3px 10px;
+  color: var(--danger);
+  background: var(--surface);
+  font-size: 11px;
+}
+
 /* ---------- collapsible meeting panes ---------- */
 .panes {
   flex: 1;

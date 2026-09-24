@@ -41,6 +41,8 @@ import { isRendererCommand, type TrayCommand, type TrayMenuState } from '../shar
 import { KnowledgeStore } from './knowledge';
 import { SessionStore } from './sessions';
 import { describeNativeWindowMessage } from './uiDebug';
+import { MousePassthroughHost } from './mousePassthrough';
+import { pointInWindow } from '../shared/passthroughMouse';
 import { DOC_EXTENSIONS, extractDocText } from './docparse';
 import { basename } from 'path';
 import { chatOnce, chatStream, type ChatResult } from './llm/adapter';
@@ -133,6 +135,21 @@ function bootstrap(): void {
   const asr = new AsrHost();
   const sidecar = new FunasrSidecar();
   const tray = new AppTray();
+  const mousePassthroughHost = new MousePassthroughHost();
+  let mousePassthrough = false;
+  let passthroughCursorInside = false;
+  let passthroughDownDelivery: Promise<unknown> = Promise.resolve();
+  let passthroughWindowDrag: { x: number; y: number } | null = null;
+  let passthroughLockedSize: { width: number; height: number } | null = null;
+
+  function logPassthroughWindow(event: string, details: Record<string, unknown> = {}): void {
+    if (!win || win.isDestroyed()) return;
+    console.log('[mouse-passthrough] window', JSON.stringify({
+      at: new Date().toISOString(), event, enabled: mousePassthrough,
+      bounds: win.getBounds(), resizable: win.isResizable(),
+      dragging: passthroughWindowDrag !== null, ...details,
+    }));
+  }
 
   /** main-process strings in the current UI language */
   const T = () => mainStrings(settings.data.ui.lang, osLang);
@@ -230,6 +247,106 @@ function bootstrap(): void {
     if (!win) return;
     if (win.isMinimized()) win.restore();
     win.showInactive();
+  }
+
+  function disableMousePassthrough(failed = false): void {
+    const wasEnabled = mousePassthrough;
+    if (wasEnabled) logPassthroughWindow('disable', { failed, lockedSize: passthroughLockedSize });
+    mousePassthrough = false;
+    passthroughCursorInside = false;
+    passthroughWindowDrag = null;
+    passthroughLockedSize = null;
+    mousePassthroughHost.stop();
+    if (wasEnabled && win && !win.isDestroyed()) {
+      win.setIgnoreMouseEvents(false);
+      win.setResizable(true);
+      win.webContents.send(IPC.mousePassthroughState, { enabled: false, failed });
+    }
+  }
+
+  async function setMousePassthrough(on: boolean): Promise<boolean> {
+    if (!on) {
+      disableMousePassthrough();
+      return false;
+    }
+    if (mousePassthrough) return true;
+    if (process.platform !== 'win32' || !win || win.isDestroyed()) return false;
+
+    await mousePassthroughHost.start((event) => {
+      const target = win;
+      if (!mousePassthrough || !target || target.isDestroyed() || !target.isVisible()) return;
+      const point = screen.screenToDipPoint({ x: event.x, y: event.y });
+      if (event.type === 'move' && passthroughWindowDrag) {
+        const before = target.getBounds();
+        target.setPosition(
+          Math.round(point.x - passthroughWindowDrag.x),
+          Math.round(point.y - passthroughWindowDrag.y),
+        );
+        const after = target.getBounds();
+        if (after.width !== before.width || after.height !== before.height) {
+          logPassthroughWindow('drag-position-size-changed', { point, before, after });
+        }
+      }
+      if (event.type === 'up' && passthroughWindowDrag) {
+        logPassthroughWindow('drag-end', { point });
+        passthroughWindowDrag = null;
+      }
+      const bounds = target.getBounds();
+      const inside = pointInWindow(point, bounds);
+      if (event.type === 'wheel' && !inside) return;
+      if (event.type === 'move') {
+        if (!inside && !passthroughCursorInside) return;
+        passthroughCursorInside = inside;
+      }
+      const localEvent = {
+        ...event,
+        x: point.x - bounds.x,
+        y: point.y - bounds.y,
+      };
+      if (event.type === 'down' || event.type === 'up') {
+        logPassthroughWindow(`mouse-${event.type}`, { point, inside, localEvent });
+      }
+      const deliver = () => target.webContents.executeJavaScript(
+        `(() => { const handler = window.__mcHandlePassthroughMouse; if (typeof handler !== 'function') return false; handler(${JSON.stringify(localEvent)}); return true; })()`,
+        event.type === 'up',
+      ).then((handled) => {
+        logPassthroughWindow(`mouse-${event.type}-delivered`, { handled, point });
+      });
+      if (event.type === 'down') {
+        // Keep down/up ordered even when the two native messages arrive faster
+        // than Chromium can run the first injected handler.
+        passthroughDownDelivery = deliver().catch((error) =>
+          console.warn('[mouse-passthrough] press delivery failed:', (error as Error).message));
+      } else if (event.type === 'up') {
+        // Preserve Chromium's user-gesture context for controls that open
+        // browser permission prompts, file pickers, or display capture.
+        void passthroughDownDelivery.then(deliver)
+          .catch((error) => console.warn('[mouse-passthrough] click delivery failed:', (error as Error).message));
+      } else {
+        target.webContents.send(IPC.mousePassthroughEvent, localEvent);
+      }
+    }, () => {
+      disableMousePassthrough(true);
+    });
+    if (!win || win.isDestroyed()) {
+      mousePassthroughHost.stop();
+      return false;
+    }
+    mousePassthrough = true;
+    try {
+      // Lock the window size while mouse input passes through it. The global
+      // mouse path still lets the user move it by dragging the title bar.
+      win.setResizable(false);
+      win.setIgnoreMouseEvents(true, { forward: true });
+      const { width, height } = win.getBounds();
+      passthroughLockedSize = { width, height };
+      logPassthroughWindow('enabled', { lockedSize: passthroughLockedSize });
+    } catch (error) {
+      disableMousePassthrough();
+      throw error;
+    }
+    win.webContents.send(IPC.mousePassthroughState, { enabled: true });
+    return true;
   }
 
   function logUiWindowState(event: string): void {
@@ -378,6 +495,21 @@ function bootstrap(): void {
     // window as the OS foreground window even when the overlay is clicked.
     // Renderer text controls temporarily opt back into focus through IPC.
     win.setFocusable(false);
+    win.on('will-resize', (event, newBounds) => {
+      if (!mousePassthrough) return;
+      logPassthroughWindow('will-resize', { newBounds, lockedSize: passthroughLockedSize });
+      event.preventDefault();
+    });
+    win.on('resize', () => {
+      if (mousePassthrough) logPassthroughWindow('resized', { lockedSize: passthroughLockedSize });
+    });
+    win.on('move', () => {
+      if (!mousePassthrough || !passthroughLockedSize) return;
+      const bounds = win?.getBounds();
+      if (bounds && (bounds.width !== passthroughLockedSize.width || bounds.height !== passthroughLockedSize.height)) {
+        logPassthroughWindow('moved-with-size-change', { lockedSize: passthroughLockedSize });
+      }
+    });
     logUiWindowState('created');
     win.on('focus', () => logUiWindowState('focus'));
     win.on('blur', () => logUiWindowState('blur'));
@@ -520,12 +652,14 @@ function bootstrap(): void {
       refreshTray();
     });
     win.on('hide', () => {
+      passthroughWindowDrag = null;
       console.log('[window] hidden');
       refreshTray();
       noticeWindowHidden();
     });
 
     win.on('closed', () => {
+      disableMousePassthrough();
       win = null;
     });
 
@@ -954,6 +1088,13 @@ function bootstrap(): void {
       }));
       return focusable;
     });
+    ipcMain.handle(IPC.mousePassthroughSet, (_e, on: boolean) => setMousePassthrough(!!on));
+    ipcMain.on(IPC.mousePassthroughDragStart, (event, point: { x: number; y: number }) => {
+      if (event.sender !== win?.webContents || !mousePassthrough) return;
+      if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return;
+      passthroughWindowDrag = { x: point.x, y: point.y };
+      logPassthroughWindow('drag-start', { point, lockedSize: passthroughLockedSize });
+    });
     ipcMain.on(IPC.uiInputDebug, (event, input: UiInputDebugEvent) => {
       if (event.sender !== win?.webContents || !input || typeof input !== 'object') return;
       const allowedTypes = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'];
@@ -1203,6 +1344,7 @@ function bootstrap(): void {
 
   app.on('before-quit', () => {
     quitting = true;
+    disableMousePassthrough();
     globalShortcut.unregisterAll();
     tray.destroy();
     void asr.stop();
