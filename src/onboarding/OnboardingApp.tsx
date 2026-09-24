@@ -25,6 +25,7 @@ import type {
   ThemeMode,
   UiLang,
 } from '../../shared/protocol';
+import { APP_DISPLAY_NAME } from '../../shared/appIdentity';
 import { DOCS, docUrl } from '../../shared/docsLinks';
 import { getSetupDict, type SetupDict } from './i18n';
 import { buildPlanPatch, keyPatchForSlot, mergeKeyPatches, planDefinition, type KeySlot } from '../../shared/onboardingPlans';
@@ -241,7 +242,7 @@ export function OnboardingApp() {
       <header className="setup-header">
         <div className="setup-header-top">
           <span className="setup-brand">
-            MeetingCopilot
+            {APP_DISPLAY_NAME}
             {info ? ` · ${t.common.version(info.version, info.platform)}` : ''}
           </span>
           <button className="btn btn-sm" onClick={() => void toggleLang()}>

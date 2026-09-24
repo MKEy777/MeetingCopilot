@@ -1,5 +1,5 @@
 /**
- * Deterministic document→text extraction for session material (resume / JD).
+ * Deterministic document→text extraction for session material (resume / interview reference).
  * NO LLM / function calling — parsing is a pure I/O task and the main answer
  * path is latency-first (HANDOFF §5 P0-2). Scanned/image-only PDFs have no
  * text layer and yield '' — the renderer surfaces that as a warning.

@@ -12,6 +12,7 @@ import {
   type DiagnosticsFacts,
 } from '../electron/diagnostics';
 import { SettingsStore, type SecretCipher } from '../electron/settings';
+import { APP_DISPLAY_NAME } from '../shared/appIdentity';
 
 const fakeCipher: SecretCipher = {
   available: () => true,
@@ -204,7 +205,7 @@ describe('buildDiagnosticsReport', () => {
     expect(report).not.toContain('Authorization: Bearer sk-aliyun');
   });
 
-  it('never carries resume, JD, transcript or answer text', () => {
+  it('never carries resume, second-resume, transcript or answer text', () => {
     const store = seededStore();
     const resume = '张三，五年后端经验，负责过支付网关重构';
     const transcript = '面试官：请介绍一下你最近的项目';
@@ -221,7 +222,7 @@ describe('buildDiagnosticsReport', () => {
 
   it('states the facts a supporter actually needs', () => {
     const report = buildDiagnosticsReport(facts(seededStore()));
-    expect(report).toContain('MeetingCopilot Diagnostic Report');
+    expect(report).toContain(`${APP_DISPLAY_NAME} Diagnostic Report`);
     expect(report).toContain('Generated locally. Sensitive content and API keys are excluded.');
     expect(report).toContain('0.1.0 (packaged: no)');
     expect(report).toContain('electron 41.1.1 / node 22.15.0');

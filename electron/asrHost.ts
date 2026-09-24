@@ -10,6 +10,7 @@
  */
 import { utilityProcess } from 'electron';
 import { join } from 'path';
+import { APP_DISPLAY_NAME } from '../shared/appIdentity';
 import type { WorkerInMessage, WorkerOutMessage } from './asr/contract';
 import type { AsrEvent } from '../shared/protocol';
 
@@ -44,7 +45,7 @@ export class AsrHost {
     if (this.child) return;
     this.emit({ kind: 'status', state: 'loading', queuedSegments: 0 });
     const child = utilityProcess.fork(join(__dirname, 'asrWorker.js'), [], {
-      serviceName: 'MeetingCopilot ASR',
+      serviceName: `${APP_DISPLAY_NAME} ASR`,
       // 'inherit' binds to the console, NOT redirected stdout — pipe and
       // forward manually so worker logs land in the main process log.
       stdio: 'pipe',

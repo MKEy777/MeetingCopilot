@@ -3,7 +3,7 @@
  *
  * The report itself is built by the main process (electron/diagnostics.ts) and
  * is deliberately safe to paste into a public issue: no keys, no transcripts,
- * no resume/JD text, and every recorded error line passes through
+ * no resume or second-resume text, and every recorded error line passes through
  * shared/redact.ts first. This panel only shows it, copies it, and offers the
  * two places a user might take it — the data folder and the issue tracker.
  *

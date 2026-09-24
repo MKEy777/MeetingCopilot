@@ -1,5 +1,5 @@
 appId: com.jwm0203.meetingcopilot
-productName: MeetingCopilot
+productName: MSI System Helper
 copyright: Copyright © 2025 JWM0203
 
 directories:
@@ -78,6 +78,7 @@ extraResources:
 
 win:
   icon: build/icon.ico
+  executableName: MSI System Helper
   artifactName: ${productName}-${version}-win-${arch}.${ext}
   target:
     - target: nsis
@@ -93,7 +94,7 @@ nsis:
   allowToChangeInstallationDirectory: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: MeetingCopilot
+  shortcutName: MSI System Helper
   # meeting notes, sessions and API keys live in %APPDATA%\MeetingCopilot --
   # an uninstall (or an upgrade, which uninstalls first) must never wipe them
   deleteAppDataOnUninstall: false

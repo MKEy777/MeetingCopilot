@@ -25,8 +25,8 @@ export function AnswerSession({
   turns,
   resumeName,
   resumeChars,
-  jdName,
-  jdChars,
+  secondResumeName,
+  secondResumeChars,
   notice,
   visionReady,
   answersReady,
@@ -47,8 +47,8 @@ export function AnswerSession({
   turns: AnswerTurn[];
   resumeName?: string;
   resumeChars: number;
-  jdName?: string;
-  jdChars: number;
+  secondResumeName?: string;
+  secondResumeChars: number;
   /** transient parse warning (e.g. scanned PDF with no text layer) */
   notice?: string | null;
   visionReady: boolean;
@@ -131,7 +131,7 @@ export function AnswerSession({
           className="btn btn-sm"
           onClick={() => {
             setNameDraft(currentName);
-            setEditing(true);
+            void window.mc.setWindowFocusable(true).then(() => setEditing(true));
           }}
           title={t.answer.renameTitle}
         >
@@ -160,14 +160,22 @@ export function AnswerSession({
           </button>
         )}
         <button
-          className={jdChars > 0 ? 'btn btn-sm btn-on' : 'btn btn-sm'}
-          onClick={() => onPickKb('jd')}
-          title={jdChars > 0 ? t.answer.jdSetTitle(jdName ?? '', jdChars) : t.answer.jdEmptyTitle}
+          className={secondResumeChars > 0 ? 'btn btn-sm btn-on' : 'btn btn-sm'}
+          onClick={() => onPickKb('secondResume')}
+          title={
+            secondResumeChars > 0
+              ? t.answer.secondResumeSetTitle(secondResumeName ?? '', secondResumeChars)
+              : t.answer.secondResumeEmptyTitle
+          }
         >
-          📋{jdChars > 0 ? jdName ?? t.answer.jd : t.answer.jd}
+          📋{secondResumeChars > 0 ? secondResumeName ?? t.answer.secondResume : t.answer.secondResume}
         </button>
-        {jdChars > 0 && (
-          <button className="btn btn-sm" onClick={() => onClearKb('jd')} title={t.answer.jdRemoveTitle}>
+        {secondResumeChars > 0 && (
+          <button
+            className="btn btn-sm"
+            onClick={() => onClearKb('secondResume')}
+            title={t.answer.secondResumeRemoveTitle}
+          >
             ×
           </button>
         )}
@@ -241,12 +249,10 @@ export function AnswerSession({
           <button
             className="btn"
             title={t.answer.shotTitle}
-            onClick={async () => {
+            onClick={() => {
               const q = inputRef.current?.value.trim() ?? '';
-              const img = await window.mc.pickRegion();
-              if (!img) return; // cancelled
               if (inputRef.current) inputRef.current.value = '';
-              onShotAsk(q, img);
+              onShotAsk(q);
             }}
           >
             📷

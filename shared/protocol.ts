@@ -21,8 +21,8 @@ export type FontScale = 'small' | 'medium' | 'large';
 export type ThemeMode = 'dark' | 'light' | 'system';
 /** UI display language (independent of answerLang, which steers the LLM) */
 export type UiLang = 'zh' | 'en';
-/** per-session material slots: resume vs job description */
-export type KbSlot = 'resume' | 'jd';
+/** per-session material slots: personal resume vs second resume */
+export type KbSlot = 'resume' | 'secondResume';
 
 /** outcome of a provider connection test (Phase 3 runs them; the settings
  * schema stores the last result so the UI can show it after a restart) */
@@ -214,8 +214,10 @@ export interface SettingsFile {
   ui: {
     stealth: boolean;
     hotkeyToggle: string;
-    /** global hotkey for region-screenshot Q&A */
+    /** global hotkey for full-screen screenshot Q&A */
     hotkeyShot: string;
+    /** global hotkey to quit the application */
+    hotkeyQuit: string;
     opacity: number;
     /** answer-body font size (small=13px / medium=16px / large=19px) */
     fontScale: FontScale;
@@ -296,6 +298,7 @@ export interface PublicSettings {
     stealth: boolean;
     hotkeyToggle: string;
     hotkeyShot: string;
+    hotkeyQuit: string;
     opacity: number;
     fontScale: FontScale;
     theme: ThemeMode;
@@ -351,6 +354,7 @@ export interface SettingsPatch {
     stealth?: boolean;
     hotkeyToggle?: string;
     hotkeyShot?: string;
+    hotkeyQuit?: string;
     opacity?: number;
     fontScale?: FontScale;
     theme?: ThemeMode;
@@ -441,11 +445,11 @@ export interface StoredSession {
   /** legacy single-slot KB (pre dual-slot); migrated to the resume slot on load */
   kbName?: string;
   kbText?: string;
-  /** dual-slot session material: resume + job description (P0-2) */
+  /** dual-slot session material: personal resume + second resume */
   resumeName?: string;
   resumeText?: string;
-  jdName?: string;
-  jdText?: string;
+  secondResumeName?: string;
+  secondResumeText?: string;
   /** rolling interview memo (P1): ≤800-char structured summary, async-updated */
   memo?: string;
 }
@@ -474,7 +478,7 @@ export interface LlmAskPayload {
   background?: string;
   /** dual-slot session material (P0-2) */
   resume?: string;
-  jd?: string;
+  secondResume?: string;
   /** rolling interview memo (P1) */
   memo?: string;
 }
@@ -519,23 +523,17 @@ export const IPC = {
   knowledgeImport: 'knowledge:import',
   /** invoke: () => {chars:number} — clear the global default KB */
   knowledgeClear: 'knowledge:clear',
-  /** invoke: (KbSlot) => {name,text,chars} | null — pick a resume/JD document
+  /** invoke: (KbSlot) => {name,text,chars} | null — pick a resume/reference document
    * (.md/.txt/.docx/.pdf, parsed deterministically) for the CURRENT session */
   knowledgePick: 'knowledge:pick',
   /** invoke: () => SessionsFile — load persisted sessions */
   sessionsLoad: 'sessions:load',
   /** send: (SessionsFile) — persist sessions (debounced by renderer) */
   sessionsSave: 'sessions:save',
-  /** invoke: () => string|null — full-screen capture, drag a region (stealth overlay), returns cropped dataURL */
-  regionPick: 'region:pick',
-  /** invoke (overlay→main): () => string|null — the captured full-screen image to draw */
-  regionImage: 'region:image',
-  /** send (overlay→main): (rect) — chosen region */
-  regionRect: 'region:rect',
-  /** send (overlay→main): () — cancel selection */
-  regionCancel: 'region:cancel',
   /** invoke: (boolean) => boolean — toggles content protection live */
   stealthSet: 'stealth:set',
+  /** invoke: (boolean) => boolean — temporarily enables main-window focus for text editing */
+  windowFocusableSet: 'window:focusable-set',
   /** send: hide window */
   winHide: 'win:hide',
   /** send: quit app (clean) */
@@ -552,7 +550,7 @@ export const IPC = {
   llmCancel: 'llm:cancel',
   /** main -> renderer: LlmEvent stream */
   llmEvent: 'llm:event',
-  /** send: ({resume?, jd?}) — warm the DeepSeek KV prefix cache (P1-6):
+  /** send: ({resume?, secondResume?}) — warm the DeepSeek KV prefix cache (P1-6):
    * one max_tokens=1 request whose system prompt is byte-identical to real
    * answer requests, so the first real question prefills from cache */
   llmPrewarm: 'llm:prewarm',

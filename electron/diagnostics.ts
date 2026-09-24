@@ -18,6 +18,7 @@ import {
   type ProviderCapability,
 } from '../shared/providerCatalog';
 import { redactSecrets } from '../shared/redact';
+import { APP_DISPLAY_NAME } from '../shared/appIdentity';
 
 // ---------- sanitized error ring buffer ----------
 
@@ -133,7 +134,7 @@ export interface DiagnosticsFacts {
 }
 
 const HEADER = [
-  'MeetingCopilot Diagnostic Report',
+  `${APP_DISPLAY_NAME} Diagnostic Report`,
   'Generated locally. Sensitive content and API keys are excluded.',
 ];
 
@@ -170,7 +171,7 @@ function pad(label: string): string {
  * Build the plaintext support report the user copies to the clipboard.
  *
  * EXCLUDED BY CONSTRUCTION (spec §D): API keys and their ciphertext,
- * Authorization headers, resume / JD / knowledge-base text, transcripts,
+ * Authorization headers, resume / second-resume / knowledge-base text, transcripts,
  * answers, audio, screenshots and absolute user paths. Keys appear as
  * yes/no per slot; the knowledge base appears as a character count. Errors
  * come from the ring buffer, which redacted them on the way in.

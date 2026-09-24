@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type { ProviderTestCode, UiLang } from '../shared/protocol';
+import { APP_DISPLAY_NAME } from '../shared/appIdentity';
 
 /**
  * UI language dictionaries (R: 界面语言). Typed nested objects instead of
@@ -25,7 +26,7 @@ const zh = {
     micStartFail: (msg: string) => `麦克风启动失败: ${msg}`,
     themInputSwitchFail: (msg: string) => `对方音频输入切换失败: ${msg}`,
     translateFail: '（翻译失败）',
-    upgradeNotice: 'MeetingCopilot 现在提供新的配置向导和连接测试。',
+    upgradeNotice: `${APP_DISPLAY_NAME} 现在提供新的配置向导和连接测试。`,
     upgradeCheck: '立即检查配置',
     upgradeSkip: '暂时跳过',
     kbNoText: (name: string) =>
@@ -97,15 +98,15 @@ const zh = {
       `简历：${name}（${chars}字）点击更换（.md/.txt/.docx/.pdf）`,
     resumeEmptyTitle: '导入我的简历（.md/.txt/.docx/.pdf）',
     resumeRemoveTitle: '移除简历',
-    jd: 'JD',
-    jdSetTitle: (name: string, chars: number) =>
-      `岗位JD：${name}（${chars}字）点击更换（.md/.txt/.docx/.pdf）`,
-    jdEmptyTitle: '导入岗位JD（.md/.txt/.docx/.pdf）',
-    jdRemoveTitle: '移除岗位JD',
+    secondResume: '第二简历',
+    secondResumeSetTitle: (name: string, chars: number) =>
+      `第二简历：${name}（${chars}字）点击更换（.md/.txt/.docx/.pdf）`,
+    secondResumeEmptyTitle: '导入第二简历或面试参考资料（八股、面试问题等）',
+    secondResumeRemoveTitle: '移除第二简历',
     clear: '清空',
     clearTitle: '清空本会话对话',
     empty: '点转录里对方那句的「⚡答」让 AI 帮你回答；或在下方随便问。答案会在这里逐条累积。',
-    emptyKbHint: '\n\n提示：点上方「📄简历」「📋JD」导入资料（支持 docx/pdf），回答会更贴合你。',
+    emptyKbHint: '\n\n提示：点上方「📄简历」「📋第二简历」导入资料；第二简历可放八股、常见面试题和答题要点。',
     stop: '停',
     copy: '复制',
     copyTitle: '复制',
@@ -113,7 +114,7 @@ const zh = {
     genWaiting: '生成中…（深度/思考模型会先思考几秒）',
     freePlaceholder: '随便问：基于当前对话向 AI 提问…',
     ask: '问',
-    shotTitle: '截图框选问视觉模型（拉框选区域，输入框内容作为问题）',
+    shotTitle: '截取完整屏幕并询问视觉模型（输入框内容作为问题）',
   },
   status: {
     state: {
@@ -201,14 +202,14 @@ const zh = {
           '第一步：在设置或配置向导里填入 API Key —— 转写和 AI 回答各需要一个，同一个服务商的 Key 可以复用。',
           '第二步：让电脑放一段有人说话的声音（视频、会议、播客都行），点标题栏的「▶ 开始」，左栏应当出现文字。',
           '第三步：在左栏任意一句上点「⚡答」，右栏就会生成可以直接照着念的回答；打开「持续答」则由 AI 自动接话。',
-          '想让回答贴合你的经历，先在右栏点「📄简历」「📋JD」导入资料（支持 .md/.txt/.docx/.pdf，全部本地解析）。',
+          '请在右栏导入「📄简历」和「📋第二简历」；第二简历可放八股、常见面试题、技术原理和答题要点（支持 .md/.txt/.docx/.pdf，本地解析）。',
         ],
       },
       apiKey: {
         title: '2. API Key 是什么',
         lines: [
           'API Key 是你在大模型服务商那边创建的一串凭证，用来证明「这些请求是我发的」，不是你的账号密码。',
-          'MeetingCopilot 自带 Key（BYOK）：Key 由你自己创建、费用由服务商向你收取，本应用不代收任何费用、也没有账号系统。',
+          `${APP_DISPLAY_NAME} 自带 Key（BYOK）：Key 由你自己创建、费用由服务商向你收取，本应用不代收任何费用、也没有账号系统。`,
           'Key 使用系统凭据服务（Windows DPAPI / macOS 钥匙串）加密后保存在本机，界面上只会显示后 4 位。',
           '请勿把 Key 贴进聊天记录或截图外传；一旦泄露，去服务商控制台删除并重新创建即可。',
         ],
@@ -275,7 +276,7 @@ const zh = {
         ],
       },
       about: {
-        title: '10. 关于 MeetingCopilot',
+        title: `10. 关于 ${APP_DISPLAY_NAME}`,
         lines: [
           '本地优先的会议 / 面试助手：转写与回答分别连接你自己配置的服务商，没有账号、没有服务器、没有遥测。',
           '设置、会话、简历等数据保存在本机的用户数据目录，卸载默认不会删除。',
@@ -416,9 +417,10 @@ const zh = {
     fontLarge: '大（19px）',
     otherSection: '其他',
     otherHint:
-      '麦克风开关与多模态切换在标题栏；简历/岗位JD 在右栏「📄简历」「📋JD」按会话导入（支持 docx/pdf）。',
+      '麦克风开关与多模态切换在标题栏；简历和第二简历在右栏「📄简历」「📋第二简历」按会话导入（支持 docx/pdf；第二简历适合放八股和面试问题）。',
     hotkeyToggle: '呼出/隐藏快捷键',
-    hotkeyShot: '截图快捷键（框选截图问答，如 Control+Shift+S）',
+    hotkeyShot: '截图快捷键（完整屏幕截图问答，如 Control+Shift+S）',
+    hotkeyQuit: '退出应用快捷键（如 Control+Shift+D）',
     autoLaunch: '开机自动启动',
     autoLaunchOn: '开启',
     autoLaunchOff: '关闭（默认）',
@@ -445,7 +447,7 @@ const en: Dict = {
     micStartFail: (msg: string) => `Microphone failed to start: ${msg}`,
     themInputSwitchFail: (msg: string) => `Failed to switch the other-party input: ${msg}`,
     translateFail: '(translation failed)',
-    upgradeNotice: 'MeetingCopilot now has a setup wizard and connection tests.',
+    upgradeNotice: `${APP_DISPLAY_NAME} now has a setup wizard and connection tests.`,
     upgradeCheck: 'Check my setup',
     upgradeSkip: 'Not now',
     kbNoText: (name: string) =>
@@ -520,16 +522,16 @@ const en: Dict = {
       `Resume: ${name} (${chars} chars) — click to replace (.md/.txt/.docx/.pdf)`,
     resumeEmptyTitle: 'Import my resume (.md/.txt/.docx/.pdf)',
     resumeRemoveTitle: 'Remove resume',
-    jd: 'JD',
-    jdSetTitle: (name: string, chars: number) =>
-      `Job description: ${name} (${chars} chars) — click to replace (.md/.txt/.docx/.pdf)`,
-    jdEmptyTitle: 'Import the job description (.md/.txt/.docx/.pdf)',
-    jdRemoveTitle: 'Remove job description',
+    secondResume: 'Second resume',
+    secondResumeSetTitle: (name: string, chars: number) =>
+      `Second resume: ${name} (${chars} chars) — click to replace (.md/.txt/.docx/.pdf)`,
+    secondResumeEmptyTitle: 'Import a second resume or interview notes (common questions, technical fundamentals)',
+    secondResumeRemoveTitle: 'Remove second resume',
     clear: 'Clear',
     clearTitle: 'Clear this session’s answers',
     empty: 'Hit “⚡Ans” on one of their transcript lines to have the AI answer it, or ask anything below. Answers accumulate here.',
     emptyKbHint:
-      '\n\nTip: import your resume / the JD with “📄Resume” “📋JD” above (docx/pdf supported) for answers tailored to you.',
+      '\n\nTip: import your resume and “📋Second resume” above. Use the second resume for interview notes, common questions, technical fundamentals and answer points.',
     stop: 'Stop',
     copy: 'Copy',
     copyTitle: 'Copy',
@@ -537,7 +539,7 @@ const en: Dict = {
     genWaiting: 'Generating… (thinking models pause a few seconds first)',
     freePlaceholder: 'Ask anything about the current conversation…',
     ask: 'Ask',
-    shotTitle: 'Screenshot a region and ask the vision model (input text becomes the question)',
+    shotTitle: 'Capture the full screen and ask the vision model (input text becomes the question)',
   },
   status: {
     state: {
@@ -627,14 +629,14 @@ const en: Dict = {
           'Step 1: add your API keys in Settings or the setup wizard — one for transcription, one for AI answers; a key from the same provider can serve both.',
           'Step 2: play something with speech in it (a video, a meeting, a podcast), click "▶ Start" in the title bar, and text should appear in the left pane.',
           'Step 3: click "⚡Ans" on any line to get an answer you can read aloud, or turn on "Auto" and let the AI reply to questions by itself.',
-          'For answers grounded in your own experience, import your resume and the job description with "📄Resume" / "📋JD" (.md/.txt/.docx/.pdf, parsed locally).',
+          'Import your resume and “📋Second resume” in the right pane. Use the second resume for interview notes, common questions, technical fundamentals and answer points (.md/.txt/.docx/.pdf, parsed locally).',
         ],
       },
       apiKey: {
         title: '2. What an API key is',
         lines: [
           'An API key is a credential you create in a model provider console. It proves the requests are yours — it is not your account password.',
-          'MeetingCopilot is bring-your-own-key: you create the key, the provider bills you, and this app collects no fee and has no accounts.',
+          `${APP_DISPLAY_NAME} is bring-your-own-key: you create the key, the provider bills you, and this app collects no fee and has no accounts.`,
           'Keys are encrypted with the OS credential store (Windows DPAPI / macOS Keychain) and stored on your machine; the UI only ever shows the last 4 characters.',
           'Never paste a key into a chat or a screenshot. If one leaks, delete it in the provider console and create a new one.',
         ],
@@ -699,7 +701,7 @@ const en: Dict = {
         ],
       },
       about: {
-        title: '10. About MeetingCopilot',
+        title: `10. About ${APP_DISPLAY_NAME}`,
         lines: [
           'A local-first meeting and interview copilot: transcription and answers each talk to the provider you configured. No accounts, no server, no telemetry.',
           'Settings, sessions and imported material live in the per-user data folder on this machine and survive an uninstall by default.',
@@ -842,9 +844,10 @@ const en: Dict = {
     fontLarge: 'Large (19px)',
     otherSection: 'Other',
     otherHint:
-      'The mic toggle and Text/Vision live in the title bar; import the resume/JD per session via “📄Resume” “📋JD” in the right pane (docx/pdf supported).',
+      'The mic toggle and Text/Vision live in the title bar; import a resume and a second resume per session via “📄Resume” and “📋Second resume” in the right pane (docx/pdf supported). Use the second resume for interview notes and common questions.',
     hotkeyToggle: 'Show/hide hotkey',
-    hotkeyShot: 'Screenshot hotkey (region screenshot Q&A, e.g. Control+Shift+S)',
+    hotkeyShot: 'Screenshot hotkey (full-screen Q&A, e.g. Control+Shift+S)',
+    hotkeyQuit: 'Quit application hotkey (e.g. Control+Shift+D)',
     autoLaunch: 'Start at login',
     autoLaunchOn: 'On',
     autoLaunchOff: 'Off (default)',

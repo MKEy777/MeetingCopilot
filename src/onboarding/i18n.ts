@@ -11,6 +11,7 @@
  */
 import type { ProviderTestCode, UiLang } from '../../shared/protocol';
 import type { ApiKeyWarning } from '../../shared/keyInput';
+import { APP_DISPLAY_NAME } from '../../shared/appIdentity';
 
 const zh = {
   locale: 'zh-CN',
@@ -37,18 +38,18 @@ const zh = {
     done: '完成',
   },
   welcome: {
-    title: '欢迎使用 MeetingCopilot',
+    title: `欢迎使用 ${APP_DISPLAY_NAME}`,
     body: '无需安装 Node.js、Python 或运行任何命令。完成几个简单设置后，即可开始实时转写与 AI 辅助。',
     byokTitle: 'BYOK：使用你自己的 API Key',
     byokBody:
-      'MeetingCopilot 采用 BYOK 模式：你需要使用自己的云服务 API Key。API 费用由相应服务商收取，MeetingCopilot 不代收费用。',
+      `${APP_DISPLAY_NAME} 采用 BYOK 模式：你需要使用自己的云服务 API Key。API 费用由相应服务商收取，${APP_DISPLAY_NAME} 不代收费用。`,
     keyExplainTitle: 'API Key 是什么？',
     keyExplainBody:
-      'API Key 可以理解为云服务商发给你的“专用通行证”。它不是你的账号密码，也不要把账号密码粘贴到这里。MeetingCopilot 使用 API Key 直接连接你选择的语音识别和 AI 服务。',
+      `API Key 可以理解为云服务商发给你的“专用通行证”。它不是你的账号密码，也不要把账号密码粘贴到这里。${APP_DISPLAY_NAME} 使用 API Key 直接连接你选择的语音识别和 AI 服务。`,
     privacyTitle: '隐私说明',
     privacy: [
       'API Key 加密保存在当前电脑。',
-      'MeetingCopilot 不提供账号服务器，也不上传你的 Key。',
+      `${APP_DISPLAY_NAME} 不提供账号服务器，也不上传你的 Key。`,
       '使用云 ASR 时，会议音频会发送给所选 ASR 服务商。',
       '使用云 LLM 时，转写文本以及你主动导入的材料会发送给所选 LLM 服务商。',
       '使用本地 ASR 时，音频不会发送给云端 ASR。',
@@ -159,7 +160,7 @@ const zh = {
   },
   connection: {
     title: '连接测试',
-    subtitle: '确认 MeetingCopilot 能听到会议里的声音。',
+    subtitle: `确认 ${APP_DISPLAY_NAME} 能听到会议里的声音。`,
     audioTitle: '测试电脑声音',
     audioIntro: '请先播放任意有声音的内容（音乐、视频或会议测试音），然后点击「开始检测」。',
     startTest: '开始检测',
@@ -222,15 +223,15 @@ const zh = {
   },
   complete: {
     title: '配置完成',
-    body: 'MeetingCopilot 已可以开始使用。',
+    body: `${APP_DISPLAY_NAME} 已可以开始使用。`,
     planLabel: '使用方案',
     asrLabel: '语音识别',
     llmLabel: 'AI 回答',
     micLabel: '麦克风',
     llmSkipped: '暂未配置（可稍后在设置中添加）',
-    tip: '进入主界面后点击「▶ 开始」采集系统声音；在右栏可以导入简历与岗位 JD，让回答更贴合你。',
-    enter: '进入 MeetingCopilot',
-    importMaterial: '导入简历或背景材料',
+    tip: '进入主界面后点击「▶ 开始」采集系统声音；在右栏导入简历和第二简历，第二简历可放八股、面试问题和答题要点。',
+    enter: `进入 ${APP_DISPLAY_NAME}`,
+    importMaterial: '导入简历或第二简历',
     applying: '正在应用配置…',
     applyFail: (msg: string) => `应用配置失败：${msg}`,
   },
@@ -268,18 +269,18 @@ const en: SetupDict = {
     done: 'Done',
   },
   welcome: {
-    title: 'Welcome to MeetingCopilot',
+    title: `Welcome to ${APP_DISPLAY_NAME}`,
     body: 'No Node.js, no Python, no commands to run. A few short steps and you are ready for live transcription with AI assistance.',
     byokTitle: 'BYOK: bring your own API key',
     byokBody:
-      'MeetingCopilot uses a BYOK model: you use your own cloud service API keys. The providers bill you directly — MeetingCopilot never collects a fee.',
+      `${APP_DISPLAY_NAME} uses a BYOK model: you use your own cloud service API keys. The providers bill you directly — ${APP_DISPLAY_NAME} never collects a fee.`,
     keyExplainTitle: 'What is an API key?',
     keyExplainBody:
-      'Think of an API key as a dedicated pass issued to you by a cloud provider. It is not your account password, and you should never paste an account password here. MeetingCopilot uses the key to talk to your chosen speech-recognition and AI services directly.',
+      `Think of an API key as a dedicated pass issued to you by a cloud provider. It is not your account password, and you should never paste an account password here. ${APP_DISPLAY_NAME} uses the key to talk to your chosen speech-recognition and AI services directly.`,
     privacyTitle: 'Privacy',
     privacy: [
       'API keys are stored encrypted on this computer.',
-      'MeetingCopilot runs no account server and never uploads your key.',
+      `${APP_DISPLAY_NAME} runs no account server and never uploads your key.`,
       'With cloud ASR, meeting audio is sent to the ASR provider you chose.',
       'With a cloud LLM, the transcript and any material you import are sent to the LLM provider you chose.',
       'With local ASR, audio is never sent to a cloud ASR service.',
@@ -397,7 +398,7 @@ const en: SetupDict = {
   },
   connection: {
     title: 'Checks',
-    subtitle: 'Confirm MeetingCopilot can hear the meeting.',
+    subtitle: `Confirm ${APP_DISPLAY_NAME} can hear the meeting.`,
     audioTitle: 'Test computer audio',
     audioIntro:
       'Play anything with sound (music, a video, a meeting test tone), then click "Start check".',
@@ -463,15 +464,15 @@ const en: SetupDict = {
   },
   complete: {
     title: 'Setup complete',
-    body: 'MeetingCopilot is ready to use.',
+    body: `${APP_DISPLAY_NAME} is ready to use.`,
     planLabel: 'Plan',
     asrLabel: 'Speech recognition',
     llmLabel: 'AI answers',
     micLabel: 'Microphone',
     llmSkipped: 'Not configured (you can add it later in Settings)',
-    tip: 'In the main window click "▶ Start" to capture system audio; import your resume and the job description in the right pane for answers tailored to you.',
-    enter: 'Open MeetingCopilot',
-    importMaterial: 'Import a resume or background material',
+    tip: 'In the main window click "▶ Start" to capture system audio; import your resume and a second resume in the right pane. Use it for interview notes, common questions and answer points.',
+    enter: `Open ${APP_DISPLAY_NAME}`,
+    importMaterial: 'Import a resume or second resume',
     applying: 'Applying your configuration…',
     applyFail: (msg: string) => `Could not apply the configuration: ${msg}`,
   },

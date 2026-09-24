@@ -137,6 +137,7 @@ export function SettingsPanel({
   const [answerLang, setAnswerLang] = useState<AnswerLang>(settings.llm.answerLang);
   const [language, setLanguage] = useState<AsrLanguage>(settings.asr.language);
   const [hotkey, setHotkey] = useState(settings.ui.hotkeyToggle);
+  const [hotkeyQuit, setHotkeyQuit] = useState(settings.ui.hotkeyQuit);
   const [visionBaseUrl, setVisionBaseUrl] = useState(settings.vision.baseUrl ?? '');
   const [visionModel, setVisionModel] = useState(settings.vision.model ?? '');
   const [visionProxy, setVisionProxy] = useState(settings.vision.proxyUrl ?? '');
@@ -302,6 +303,7 @@ export function SettingsPanel({
         ui: {
           hotkeyToggle: hotkey.trim(),
           hotkeyShot: hotkeyShot.trim(),
+          hotkeyQuit: hotkeyQuit.trim(),
           fontScale,
           theme,
           lang: uiLang,
@@ -639,6 +641,14 @@ export function SettingsPanel({
         <input
           value={hotkeyShot}
           onChange={(e) => setHotkeyShot(e.target.value)}
+          spellCheck={false}
+        />
+      </div>
+      <div className="settings-row">
+        <label>{t.settings.hotkeyQuit}</label>
+        <input
+          value={hotkeyQuit}
+          onChange={(e) => setHotkeyQuit(e.target.value)}
           spellCheck={false}
         />
       </div>

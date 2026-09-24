@@ -22,6 +22,7 @@ import {
   captureKindForPlatform,
   whisperExecutionProvidersForPlatform,
 } from '../shared/platform';
+import { APP_DISPLAY_NAME, LEGACY_USER_DATA_DIR_NAME } from '../shared/appIdentity';
 import { AsrHost } from './asrHost';
 import {
   LocalPythonProbe,
@@ -73,34 +74,36 @@ const MODEL_ID = 'onnx-community/whisper-large-v3-turbo-ONNX';
  * documentation link. */
 const RELEASES_URL = 'https://github.com/JWM0203/MeetingCopilot/releases/latest';
 
-/** Region-selection overlay: shows the captured screen as an opaque bg (so a
- * content-protected window never renders black locally) and lets the user drag
- * a rectangle. Uses window.mc from the shared preload. */
-const regionOverlayHtml = (tip: string) => `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;height:100%;overflow:hidden;cursor:crosshair;user-select:none}
-#img{position:fixed;inset:0;width:100vw;height:100vh;object-fit:fill}
-#dim{position:fixed;inset:0;background:rgba(0,0,0,0.35)}
-#sel{position:fixed;display:none;border:2px solid #2a6df4;box-shadow:0 0 0 9999px rgba(0,0,0,0.35)}
-#tip{position:fixed;top:14px;left:50%;transform:translateX(-50%);color:#fff;background:rgba(0,0,0,0.65);padding:6px 14px;border-radius:8px;font:13px 'Microsoft YaHei',sans-serif;z-index:9}
-</style></head><body>
-<img id="img"/><div id="dim"></div><div id="sel"></div>
-<div id="tip">${tip}</div>
-<script>
-(async()=>{try{const u=await window.mc.regionImage();if(u){document.getElementById('img').src=u;}}catch(e){}})();
-let sx,sy,drag=false;const sel=document.getElementById('sel'),dim=document.getElementById('dim');
-function rect(e){return{x:Math.min(sx,e.clientX),y:Math.min(sy,e.clientY),width:Math.abs(e.clientX-sx),height:Math.abs(e.clientY-sy)};}
-function upd(e){const r=rect(e);sel.style.left=r.x+'px';sel.style.top=r.y+'px';sel.style.width=r.width+'px';sel.style.height=r.height+'px';}
-addEventListener('mousedown',e=>{drag=true;sx=e.clientX;sy=e.clientY;dim.style.display='none';sel.style.display='block';upd(e);});
-addEventListener('mousemove',e=>{if(drag)upd(e);});
-addEventListener('mouseup',e=>{if(!drag)return;drag=false;const r=rect(e);if(r.width>4&&r.height>4)window.mc.regionRect(r);else window.mc.regionCancel();});
-addEventListener('keydown',e=>{if(e.key==='Escape')window.mc.regionCancel();});
-</script></body></html>`;
+/** Capture the primary display as a complete image for screenshot Q&A. The
+ * caller chooses the primary source explicitly so multi-monitor setups do not
+ * depend on the order returned by desktopCapturer. */
+async function capturePrimaryScreenDataUrl(): Promise<string> {
+  const display = screen.getPrimaryDisplay();
+  const scale = display.scaleFactor;
+  const maxWidth = 1920;
+  const nativeWidth = display.size.width * scale;
+  const resize = Math.min(1, maxWidth / Math.max(1, nativeWidth));
+  const thumbnailSize = {
+    width: Math.max(1, Math.round(nativeWidth * resize)),
+    height: Math.max(1, Math.round(display.size.height * scale * resize)),
+  };
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize });
+  const source = sources.find((s) => s.display_id === String(display.id)) ?? sources[0];
+  if (!source) throw new Error('no screen source available');
+  return source.thumbnail.toDataURL();
+}
 
-app.setName('MeetingCopilot');
+app.setName(APP_DISPLAY_NAME);
 
 // E2E/demo hook: run against an isolated profile — must precede the
 // single-instance lock so a test instance never collides with a real one
-if (process.env.MC_USERDATA) app.setPath('userData', process.env.MC_USERDATA);
+if (process.env.MC_USERDATA) {
+  app.setPath('userData', process.env.MC_USERDATA);
+} else {
+  // Keep the existing profile after changing the display name. This preserves
+  // API keys, imported materials and sessions created by older builds.
+  app.setPath('userData', join(app.getPath('appData'), LEGACY_USER_DATA_DIR_NAME));
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -212,9 +215,9 @@ function bootstrap(): void {
 
   // ---- window visibility + system tray ----------------------------------
   // Quit/hide matrix (Phase 4):
-  //   hide  (hotkey / 「—」 / tray toggle) -> window stays alive, app keeps
+  //   hide  (show/hide hotkey / 「—」 / tray toggle) -> window stays alive, app keeps
   //         running, tray is the way back; NEVER quits.
-  //   quit  (titlebar ✕ / tray 退出 / OS shutdown) -> app.quit() -> before-quit
+  //   quit  (quit hotkey / titlebar ✕ / tray 退出 / OS shutdown) -> app.quit() -> before-quit
   //         reaps the ASR utilityProcess, the python sidecar and the tray.
   //   first-run wizard closed without completing -> app.quit() (Phase 2), since
   //         nothing is configured and no main window exists yet.
@@ -224,8 +227,7 @@ function bootstrap(): void {
   function showWindow(): void {
     if (!win) return;
     if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
+    win.showInactive();
   }
 
   function toggleWindow(): void {
@@ -319,6 +321,7 @@ function bootstrap(): void {
     globalShortcut.unregisterAll();
     const toggle = settings.data.ui.hotkeyToggle;
     const shot = settings.data.ui.hotkeyShot;
+    const quit = settings.data.ui.hotkeyQuit;
     try {
       if (toggle) {
         const ok = globalShortcut.register(toggle, () => toggleWindow());
@@ -327,6 +330,10 @@ function bootstrap(): void {
       if (shot) {
         const ok = globalShortcut.register(shot, () => win?.webContents.send(IPC.shotHotkey));
         if (!ok) console.warn(`[main] shot hotkey ${shot} registration failed (in use?)`);
+      }
+      if (quit) {
+        const ok = globalShortcut.register(quit, () => app.quit());
+        if (!ok) console.warn(`[main] quit hotkey ${quit} registration failed (in use?)`);
       }
     } catch (e) {
       console.warn('[main] hotkey register error:', (e as Error).message);
@@ -342,6 +349,7 @@ function bootstrap(): void {
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
+      show: false,
       alwaysOnTop: true,
       skipTaskbar: true,
       hasShadow: false,
@@ -353,12 +361,19 @@ function bootstrap(): void {
         backgroundThrottling: false,
       },
     });
+    // The copilot is an overlay during a presentation. Keep the presentation
+    // window as the OS foreground window even when the overlay is clicked.
+    // Renderer text controls temporarily opt back into focus through IPC.
+    win.setFocusable(false);
     win.setAlwaysOnTop(true, 'screen-saver');
     win.setContentProtection(settings.data.ui.stealth);
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (e) => e.preventDefault());
 
     win.webContents.on('did-finish-load', () => {
+      // Showing an overlay must not activate it or move focus away from the
+      // presentation window that is currently receiving keyboard input.
+      win?.showInactive();
       // replay cached ASR state for late-attaching renderer
       if (asr.lastReady) win?.webContents.send(IPC.asrEvent, asr.lastReady);
       if (asr.lastStatus) win?.webContents.send(IPC.asrEvent, asr.lastStatus);
@@ -510,7 +525,6 @@ function bootstrap(): void {
           pendingAsrRestart = false;
           void asr.stop().then(() => startAsr());
         }
-        win?.focus();
         return;
       }
       // first-run launch closed without finishing => nothing is configured and
@@ -556,10 +570,10 @@ function bootstrap(): void {
     let keepWarmTimer: NodeJS.Timeout | null = null;
 
     /** same material fallback as llmAsk — prewarm MUST match real requests byte-for-byte */
-    function stablePrefixFor(resume?: string, jd?: string): string {
-      const hasMaterial = !!(resume || jd);
+    function stablePrefixFor(resume?: string, secondResume?: string): string {
+      const hasMaterial = !!(resume || secondResume);
       const effResume = resume || (hasMaterial ? '' : knowledge.text);
-      return buildStablePrefix(effResume, jd ?? '', settings.data.llm.answerLang);
+      return buildStablePrefix(effResume, secondResume ?? '', settings.data.llm.answerLang);
     }
 
     async function doPrewarm(prefix: string, reason: string): Promise<void> {
@@ -583,8 +597,8 @@ function bootstrap(): void {
 
     ipcMain.on(
       IPC.llmPrewarm,
-      (_e, payload: { resume?: string; jd?: string; immediate?: boolean } = {}) => {
-        const prefix = stablePrefixFor(payload.resume, payload.jd);
+      (_e, payload: { resume?: string; secondResume?: string; immediate?: boolean } = {}) => {
+        const prefix = stablePrefixFor(payload.resume, payload.secondResume);
         const dirty = prefix !== lastPrefix;
         const cold = Date.now() - lastPrefixActivity >= PREWARM_IDLE_MS;
         if (!dirty && !cold) return;
@@ -631,7 +645,11 @@ function bootstrap(): void {
     ipcMain.handle(IPC.asrReplay, () => ({ ready: asr.lastReady, status: asr.lastStatus }));
     ipcMain.handle(IPC.settingsSet, (_e, patch: SettingsPatch) => {
       settings.applyPatch(patch);
-      if (patch.ui?.hotkeyToggle !== undefined || patch.ui?.hotkeyShot !== undefined) {
+      if (
+        patch.ui?.hotkeyToggle !== undefined ||
+        patch.ui?.hotkeyShot !== undefined ||
+        patch.ui?.hotkeyQuit !== undefined
+      ) {
         registerHotkeys();
       }
       if (patch.ui?.stealth !== undefined) {
@@ -819,9 +837,9 @@ function bootstrap(): void {
       knowledge.clear();
       return { chars: knowledge.chars };
     });
-    ipcMain.handle(IPC.knowledgePick, async (_e, slot: 'resume' | 'jd' = 'resume') => {
+    ipcMain.handle(IPC.knowledgePick, async (_e, slot: 'resume' | 'secondResume' = 'resume') => {
       const r = await dialog.showOpenDialog({
-        title: slot === 'jd' ? T().pickJdTitle : T().pickResumeTitle,
+        title: slot === 'secondResume' ? T().pickSecondResumeTitle : T().pickResumeTitle,
         filters: [{ name: T().docFilter, extensions: [...DOC_EXTENSIONS] }],
         properties: ['openFile'],
       });
@@ -839,91 +857,19 @@ function bootstrap(): void {
     ipcMain.handle(IPC.sessionsLoad, () => sessionStore.load());
     ipcMain.on(IPC.sessionsSave, (_e, data) => sessionStore.save(data));
 
-    // ---- region screenshot: capture full screen, let the user drag a region
-    // on a STEALTH overlay that shows the capture as its (opaque) background —
-    // avoids the transparent-window black-screen bug and is excluded from
-    // recording via content protection. Returns the cropped image dataURL. ----
-    let regionResolve: ((r: { x: number; y: number; width: number; height: number } | null) => void) | null = null;
-    let pendingRegionImage: string | null = null;
-    let regionWin: BrowserWindow | null = null;
-
-    ipcMain.handle(IPC.regionImage, () => pendingRegionImage);
-    ipcMain.on(IPC.regionRect, (_e, r) => {
-      const f = regionResolve;
-      regionResolve = null;
-      regionWin?.close();
-      f?.(r);
-    });
-    ipcMain.on(IPC.regionCancel, () => {
-      const f = regionResolve;
-      regionResolve = null;
-      regionWin?.close();
-      f?.(null);
-    });
-
-    ipcMain.handle(IPC.regionPick, async () => {
-      const disp = screen.getPrimaryDisplay();
-      const sf = disp.scaleFactor;
-      const w = Math.round(disp.size.width * sf);
-      const h = Math.round(disp.size.height * sf);
-      const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: w, height: h } });
-      const src = sources.find((s) => s.display_id === String(disp.id)) ?? sources[0];
-      if (!src) return null;
-      const full = src.thumbnail;
-      pendingRegionImage = full.toDataURL();
-
-      const rect = await new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
-        regionResolve = resolve;
-        const b = disp.bounds;
-        const ov = new BrowserWindow({
-          x: b.x,
-          y: b.y,
-          width: b.width,
-          height: b.height,
-          frame: false,
-          alwaysOnTop: true,
-          skipTaskbar: true,
-          hasShadow: false,
-          resizable: false,
-          movable: false,
-          fullscreenable: false,
-          enableLargerThanScreen: true,
-          webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true },
-        });
-        regionWin = ov;
-        ov.setContentProtection(true); // selection overlay invisible to recording
-        ov.setAlwaysOnTop(true, 'screen-saver');
-        ov.on('closed', () => {
-          if (regionResolve) {
-            const f = regionResolve;
-            regionResolve = null;
-            f(null);
-          }
-          regionWin = null;
-        });
-        void ov.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(regionOverlayHtml(T().regionTip)));
-      });
-
-      const img = pendingRegionImage;
-      pendingRegionImage = null;
-      if (!rect || rect.width < 4 || rect.height < 4 || !img) return null;
-      try {
-        const cropped = full.crop({
-          x: Math.round(rect.x * sf),
-          y: Math.round(rect.y * sf),
-          width: Math.round(rect.width * sf),
-          height: Math.round(rect.height * sf),
-        });
-        return cropped.toDataURL();
-      } catch (e) {
-        console.error('[region] crop failed:', (e as Error).message);
-        return null;
-      }
-    });
+    // ---- full-screen screenshot capture for vision Q&A ----
+    // Capturing happens in the main process so both the button and the global
+    // hotkey use the same primary-display image without an interactive overlay.
     ipcMain.handle(IPC.stealthSet, (_e, on: boolean) => {
       settings.applyPatch({ ui: { stealth: on } });
       win?.setContentProtection(on);
       return on;
+    });
+    ipcMain.handle(IPC.windowFocusableSet, (_e, on: boolean) => {
+      const focusable = !!on;
+      win?.setFocusable(focusable);
+      if (focusable) win?.focus();
+      return focusable;
     });
     ipcMain.on(IPC.winHide, () => win?.hide());
     ipcMain.on(IPC.appQuit, () => app.quit());
@@ -942,7 +888,7 @@ function bootstrap(): void {
       const isTranslate = payload.mode === 'translate';
       // session dual-slot material first; the global default KB only fills in
       // when the session has nothing (translate stays a clean pass-through)
-      const hasMaterial = !!(payload.resume || payload.jd || payload.background);
+      const hasMaterial = !!(payload.resume || payload.secondResume || payload.background);
       const messages = buildAnswerMessages({
         mode: payload.mode,
         question: payload.question,
@@ -951,7 +897,7 @@ function bootstrap(): void {
         answerLang: payload.answerLang ?? settings.data.llm.answerLang,
         history: payload.history,
         resume: isTranslate ? undefined : payload.resume,
-        jd: isTranslate ? undefined : payload.jd,
+        secondResume: isTranslate ? undefined : payload.secondResume,
         memo: isTranslate ? undefined : payload.memo,
         background: isTranslate ? undefined : payload.background || (hasMaterial ? undefined : knowledge.text),
       });
@@ -967,7 +913,7 @@ function bootstrap(): void {
 
       // a real answer request refreshes the provider-side prefix cache itself
       if (!isTranslate && !useVision && payload.mode !== 'free') {
-        lastPrefix = stablePrefixFor(payload.resume || payload.background, payload.jd);
+        lastPrefix = stablePrefixFor(payload.resume || payload.background, payload.secondResume);
         lastPrefixActivity = Date.now();
       }
 
@@ -1053,45 +999,60 @@ function bootstrap(): void {
     // the capture automatically (content protection). ----
     ipcMain.on(
       IPC.shotAsk,
-      (_e, payload: { requestId: string; question: string; background?: string; imageDataUrl?: string }) => {
-      const sendEv = (ev: LlmEvent) => win?.webContents.send(IPC.llmEvent, ev);
-      const vision = settings.data.vision;
-      const apiKey = settings.getVisionApiKey();
-      if (!vision.baseUrl || !vision.model || !apiKey) {
-        sendEv({
-          requestId: payload.requestId,
-          kind: 'error',
-          message: T().noVision,
-        });
-        return;
-      }
-      const ac = new AbortController();
-      llmControllers.set(payload.requestId, ac);
-      // region mode provides a pre-cropped image; else capture the full screen
-      const imgP = payload.imageDataUrl
-        ? Promise.resolve(payload.imageDataUrl)
-        : desktopCapturer
-            .getSources({ types: ['screen'], thumbnailSize: { width: 1600, height: 900 } })
-            .then((sources) => sources[0].thumbnail.toDataURL());
-      imgP
-        .then((dataUrl) =>
-          visionChat(
-            { baseUrl: vision.baseUrl!, model: vision.model!, apiKey, proxyUrl: vision.proxyUrl },
-            buildVisionMessages(payload.question, dataUrl, payload.background || knowledge.text),
-            ac.signal,
-          ),
-        )
-        .then((text) => {
-          sendEv({ requestId: payload.requestId, kind: 'delta', text });
-          sendEv({ requestId: payload.requestId, kind: 'done', text });
-        })
-        .catch((e: Error) => {
-          if (ac.signal.aborted) return;
-          console.error('[vision] request failed:', e.message);
-          sendEv({ requestId: payload.requestId, kind: 'error', message: e.message });
-        })
-        .finally(() => llmControllers.delete(payload.requestId));
-    });
+      (
+        _e,
+        payload: {
+          requestId: string;
+          question: string;
+          resume?: string;
+          secondResume?: string;
+          imageDataUrl?: string;
+        },
+      ) => {
+        const sendEv = (ev: LlmEvent) => win?.webContents.send(IPC.llmEvent, ev);
+        const vision = settings.data.vision;
+        const apiKey = settings.getVisionApiKey();
+        if (!vision.baseUrl || !vision.model || !apiKey) {
+          sendEv({
+            requestId: payload.requestId,
+            kind: 'error',
+            message: T().noVision,
+          });
+          return;
+        }
+        const ac = new AbortController();
+        llmControllers.set(payload.requestId, ac);
+        // Callers may provide an image explicitly; the normal button/hotkey
+        // path captures the complete primary display automatically.
+        const imgP = payload.imageDataUrl
+          ? Promise.resolve(payload.imageDataUrl)
+          : capturePrimaryScreenDataUrl();
+        const hasMaterial = !!(payload.resume || payload.secondResume);
+        imgP
+          .then((dataUrl) =>
+            visionChat(
+              { baseUrl: vision.baseUrl!, model: vision.model!, apiKey, proxyUrl: vision.proxyUrl },
+              buildVisionMessages(
+                payload.question,
+                dataUrl,
+                payload.resume || (hasMaterial ? undefined : knowledge.text),
+                payload.secondResume,
+              ),
+              ac.signal,
+            ),
+          )
+          .then((text) => {
+            sendEv({ requestId: payload.requestId, kind: 'delta', text });
+            sendEv({ requestId: payload.requestId, kind: 'done', text });
+          })
+          .catch((e: Error) => {
+            if (ac.signal.aborted) return;
+            console.error('[vision] request failed:', e.message);
+            sendEv({ requestId: payload.requestId, kind: 'error', message: e.message });
+          })
+          .finally(() => llmControllers.delete(payload.requestId));
+      },
+    );
 
     // ---- ASR: warm the worker at launch (PLAN §6.3) ----
     asr.onEvent((ev: AsrEvent) => {
@@ -1131,10 +1092,14 @@ function bootstrap(): void {
   });
 
   app.on('second-instance', () => {
-    const target = setupWin ?? win;
-    if (target?.isMinimized()) target.restore();
-    target?.show();
-    target?.focus();
+    if (setupWin) {
+      if (setupWin.isMinimized()) setupWin.restore();
+      setupWin.show();
+      setupWin.focus();
+      return;
+    }
+    if (win?.isMinimized()) win.restore();
+    win?.showInactive();
   });
 
   app.on('before-quit', () => {

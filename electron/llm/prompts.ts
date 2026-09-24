@@ -5,7 +5,7 @@
  * line to Chinese. Answer language (zh/en) is a runtime prompt hook.
  *
  * v2 (2026-07-10): cache-friendly three-layer layout —
- *   stable prefix  = persona + 【简历】 + 【岗位JD】 + lang directive
+ *   stable prefix  = persona + 【第二简历】 + 【简历】 + lang directive
  *                    (BYTE-STABLE across requests → DeepSeek prefix cache)
  *   slow state     = 【面试备忘】memo (updated every few turns)
  *   fast context   = history turns + recent transcript + this question + hint
@@ -36,26 +36,28 @@ const PERSONA = [
   '- 不用 Markdown 标题、编号、加粗等书面格式，分点直接换行；',
   '- 行为/经历类问题按 STAR 展开：情境→任务→行动→结果；',
   '- 技术类问题先一句话讲思路，再给关键点，必要时给复杂度或对比结论；',
-  '- 只能使用【简历】里的真实经历，绝不编造简历之外的公司、项目、数字；',
+  '- 回答知识、答题内容和表达方式优先采用【第二简历】；两份资料冲突时以【第二简历】为准；',
+  '- 【简历】用于补充我的真实个人经历；不得把参考资料中的示例、他人经历或虚构内容说成我的经历；',
+  '- 两份资料都没有的公司、项目、数字和经历绝不编造；',
   '- 没把握的问题，给出稳妥的通用说法，或一句得体的争取思考时间的话术。',
 ];
 
 /** total injected background budget; keeps prompts bounded regardless of size */
 export const MAX_BACKGROUND_CHARS = 8000;
-/** when both slots are present the resume gets the bigger share */
-export const RESUME_BUDGET = 5000;
-export const JD_BUDGET = MAX_BACKGROUND_CHARS - RESUME_BUDGET;
+/** when both slots are present the second resume gets the bigger share */
+export const SECOND_RESUME_BUDGET = 5000;
+export const RESUME_BUDGET = MAX_BACKGROUND_CHARS - SECOND_RESUME_BUDGET;
 
 /** resume: keep project/work-experience sections when over budget */
 export const RESUME_PRIORITY =
   /(项目|经历|经验|工作|实习|成果|职责|Project|Experience|Work|Achievement)/i;
-/** JD: keep responsibilities/requirements sections when over budget */
-export const JD_PRIORITY =
-  /(职责|要求|责任|任职|资格|技能|优先|加分|Responsibilit|Requirement|Qualification|Skill)/i;
+/** second resume: keep interview questions and technical reference sections */
+export const SECOND_RESUME_PRIORITY =
+  /(八股|面试题|面试问题|常见问题|参考答案|答题要点|技术原理|原理|知识点|技术要点|算法|复杂度|面试|Interview|Question|Answer|Principle|Fundamental|Technical)/i;
 
 /**
  * Deterministic budget clip that prefers paragraphs matching `priority`
- * (e.g. a resume's project experience, a JD's requirements) instead of a
+ * (e.g. a resume's project experience, a second resume's interview notes) instead of a
  * blind head-truncation. Output order stays the original document order.
  */
 export function smartClip(text: string, budget: number, priority: RegExp): string {
@@ -81,29 +83,29 @@ export function smartClip(text: string, budget: number, priority: RegExp): strin
 }
 
 /**
- * The BYTE-STABLE system prompt: persona + resume + JD + language directive.
+ * The BYTE-STABLE system prompt: persona + second resume + resume + language directive.
  * Same inputs MUST yield the identical string (no timestamps / randomness) —
  * the LLM prewarm request and every real request share this prefix so the
  * provider's prefix cache (DeepSeek 0.1x pricing + faster prefill) hits.
  */
-export function buildStablePrefix(resume: string, jd: string, lang: AnswerLang): string {
+export function buildStablePrefix(resume: string, secondResume: string, lang: AnswerLang): string {
   const parts = [...PERSONA];
   const r = resume.trim();
-  const j = jd.trim();
+  const sr = secondResume.trim();
+  if (sr) {
+    parts.push(
+      '',
+      '【第二简历】（我的首选面试参考资料：八股、常见面试问题、答题要点等）',
+      smartClip(sr, r ? SECOND_RESUME_BUDGET : MAX_BACKGROUND_CHARS, SECOND_RESUME_PRIORITY),
+      '【第二简历结束】',
+    );
+  }
   if (r) {
     parts.push(
       '',
-      '【简历】（我的真实资料，回答只能基于此）',
-      smartClip(r, j ? RESUME_BUDGET : MAX_BACKGROUND_CHARS, RESUME_PRIORITY),
+      '【简历】（我的个人经历资料，用于补充真实经历）',
+      smartClip(r, sr ? RESUME_BUDGET : MAX_BACKGROUND_CHARS, RESUME_PRIORITY),
       '【简历结束】',
-    );
-  }
-  if (j) {
-    parts.push(
-      '',
-      '【岗位JD】（本场面试针对的职位，回答向它贴合）',
-      smartClip(j, r ? JD_BUDGET : MAX_BACKGROUND_CHARS, JD_PRIORITY),
-      '【岗位JD结束】',
     );
   }
   parts.push('', langDirective(lang));
@@ -114,9 +116,9 @@ export function buildStablePrefix(resume: string, jd: string, lang: AnswerLang):
 export function questionHint(kind: QuestionKind): string {
   switch (kind) {
     case 'behavioral':
-      return '（题型：行为/经历题——用 STAR 结构，讲简历里的真实经历）';
+      return '（题型：行为/经历题——优先参考第二简历中的准备内容；没有覆盖时再用简历里的真实经历按 STAR 回答）';
     case 'technical':
-      return '（题型：技术题——先一句话思路，再关键点，必要时给复杂度）';
+      return '（题型：技术题——优先参考第二简历中的八股、技术原理和面试问题；先讲思路，再给关键点，必要时说明复杂度）';
     case 'smalltalk':
       return '（题型：寒暄/暖场——一两句自然简短的回应即可，不用展开）';
     default:
@@ -186,10 +188,10 @@ export interface AnswerPromptInput {
   answerLang?: AnswerLang;
   /** prior Q&A turns for a coherent session (oldest first) */
   history?: ChatMessage[];
-  /** resume slot (双槽资料); falls back to `background` */
+  /** personal resume slot; falls back to `background` */
   resume?: string;
-  /** job-description slot (双槽资料) */
-  jd?: string;
+  /** preferred interview reference slot (八股、面试问题等) */
+  secondResume?: string;
   /** legacy single-slot KB / global default — treated as resume material */
   background?: string;
   /** rolling interview memo (P1) — slow-changing block, its own message */
@@ -229,13 +231,45 @@ export function buildTranslateMessages(text: string): ChatMessage[] {
 export function buildVisionMessages(
   question: string,
   imageDataUrl: string,
-  background?: string,
+  resume?: string,
+  secondResume?: string,
 ): ChatMessage[] {
-  const bg = (background ?? '').trim();
+  const r = (resume ?? '').trim();
+  const sr = (secondResume ?? '').trim();
+  const references: string[] = [];
+  if (sr) {
+    references.push(
+      `【第二简历】（首选面试参考资料）\n${smartClip(
+        sr,
+        r ? SECOND_RESUME_BUDGET : MAX_BACKGROUND_CHARS,
+        SECOND_RESUME_PRIORITY,
+      )}`,
+    );
+  }
+  if (r) {
+    references.push(
+      `【简历】（个人经历补充资料）\n${smartClip(
+        r,
+        sr ? RESUME_BUDGET : MAX_BACKGROUND_CHARS,
+        RESUME_PRIORITY,
+      )}`,
+    );
+  }
   const sys =
-    '你是会议助手。用户发来一张屏幕截图（通常是对方共享的 PPT/文档或一道题目）。用中文简明回答用户关于截图的问题；若是提问/题目，给出用户可以直接说的回答要点或解题思路。' +
-    (bg
-      ? `\n\n===== 本人资料与知识库（作答时优先采用） =====\n${bg.slice(0, MAX_BACKGROUND_CHARS)}\n===== 资料结束 =====`
+    '你是面试截图答题助手。请先在内部判断截图内容属于编程题还是问答题，禁止把分类过程、推理过程或客套话输出给用户。只返回用户可以直接使用的结果。\n\n' +
+    '如果是编程题：\n' +
+    '1. 根据题面、输入输出说明、代码模板和函数签名判断是 ACM 格式还是牛客格式。\n' +
+    '2. 语言只能在 C++ 和 Python 中选择：算法题使用 C++；实现 Agent 相关功能使用 Python。语言和题型以截图内容为准。\n' +
+    '3. ACM 格式输出可直接提交的完整程序，包含必要的输入输出处理。\n' +
+    '4. 牛客格式只输出截图要求的函数或类实现，不自行补充完整 main 模板。\n' +
+    '5. 只输出代码（可以放在一个代码块中），不要在代码块外写解释。代码内用凝练注释说明关键步骤，并在代码注释中写明时间复杂度和空间复杂度。\n\n' +
+    '如果是问答题：\n' +
+    '1. 直接输出简洁、准确、可以照着回答的答案。\n' +
+    '2. 如果是选择题，只输出正确选项或选项内容。\n' +
+    '3. 不输出分类结果、长篇分析、推理过程或“答案如下”等前缀。\n\n' +
+    '回答优先采用第二简历。两份资料冲突时以第二简历为准；不得把参考资料中的示例说成用户亲身经历。与截图问题无关的参考资料不要加入答案。' +
+    (references.length
+      ? `\n\n===== 面试参考资料 =====\n${references.join('\n\n')}\n===== 资料结束 =====`
       : '');
   return [
     {
@@ -260,19 +294,27 @@ export function buildAnswerMessages(input: AnswerPromptInput): ChatMessage[] {
   const lang: AnswerLang = input.answerLang ?? 'chinese';
   const context = clampTranscript(input.recentTranscript);
   const resume = (input.resume ?? '').trim() || (input.background ?? '').trim();
-  const jd = (input.jd ?? '').trim();
+  const secondResume = (input.secondResume ?? '').trim();
 
   // Free "随便问": raw pass-through — NO meeting-assistant persona, so identity
   // / "which model are you" questions get the model's truthful answer. The
   // transcript + KB are offered only as optional reference.
   if (input.mode === 'free') {
     const refs: string[] = [];
-    if (resume) refs.push(`【本人资料（简历）】\n${resume.slice(0, MAX_BACKGROUND_CHARS)}`);
-    if (jd) refs.push(`【岗位JD】\n${jd.slice(0, MAX_BACKGROUND_CHARS)}`);
+    if (secondResume) refs.push(`【第二简历】（首选面试参考资料）\n${secondResume.slice(0, MAX_BACKGROUND_CHARS)}`);
+    if (resume) refs.push(`【简历】（个人经历补充资料）\n${resume.slice(0, MAX_BACKGROUND_CHARS)}`);
     if (context.length) refs.push(`【最近的对话转录】\n${context.join('\n')}`);
     const msgs: ChatMessage[] = [];
     if (refs.length) {
-      msgs.push({ role: 'system', content: `以下资料供参考（可用可不用）：\n\n${refs.join('\n\n')}` });
+      msgs.push({
+        role: 'system',
+        content: [
+          '回答面试相关问题时，优先采用第二简历；第二简历与简历冲突时以第二简历为准。',
+          '简历只用于补充用户本人的真实经历；不得把参考资料中的示例说成用户亲身经历，也不得编造资料中没有的事实。',
+          '',
+          refs.join('\n\n'),
+        ].join('\n'),
+      });
     }
     msgs.push(...(input.history ?? []));
     msgs.push({ role: 'user', content: (input.freeQuestion ?? '').trim() });
@@ -280,7 +322,7 @@ export function buildAnswerMessages(input: AnswerPromptInput): ChatMessage[] {
   }
 
   // segment / continuous: teleprompter with the stable prefix
-  const msgs: ChatMessage[] = [{ role: 'system', content: buildStablePrefix(resume, jd, lang) }];
+  const msgs: ChatMessage[] = [{ role: 'system', content: buildStablePrefix(resume, secondResume, lang) }];
 
   const memo = (input.memo ?? '').trim();
   if (memo) {

@@ -28,11 +28,13 @@ export interface McApi {
   rerunOnboarding(): Promise<boolean>;
   importKnowledge(): Promise<{ chars: number }>;
   clearKnowledge(): Promise<{ chars: number }>;
-  /** pick a resume/JD document for the current session (.md/.txt/.docx/.pdf) */
+  /** pick a resume/reference document for the current session (.md/.txt/.docx/.pdf) */
   pickKnowledge(slot: KbSlot): Promise<{ name: string; text: string; chars: number } | null>;
   loadSessions(): Promise<SessionsFile>;
   saveSessions(data: SessionsFile): void;
   setStealth(on: boolean): Promise<boolean>;
+  /** Enable focus only while the user is editing a text control. */
+  setWindowFocusable(on: boolean): Promise<boolean>;
   sendPcm(buf: ArrayBuffer, captureTs: number, channel: 'them' | 'me'): void;
   captureStarted(): void;
   captureStopped(): void;
@@ -44,21 +46,14 @@ export interface McApi {
   shotAsk(payload: {
     requestId: string;
     question: string;
-    background?: string;
+    resume?: string;
+    secondResume?: string;
     imageDataUrl?: string;
   }): void;
-  /** capture full screen, drag a stealth region overlay; returns cropped dataURL or null */
-  pickRegion(): Promise<string | null>;
-  /** overlay-only: fetch the captured background image */
-  regionImage(): Promise<string | null>;
-  /** overlay-only: report chosen rect */
-  regionRect(r: { x: number; y: number; width: number; height: number }): void;
-  /** overlay-only: cancel */
-  regionCancel(): void;
   llmCancel(requestId: string): void;
   /** P1-6: warm the DeepSeek prefix cache with the session's material;
    * immediate=true warms even when not capturing (▶ start / material import) */
-  prewarm(payload: { resume?: string; jd?: string; immediate?: boolean }): void;
+  prewarm(payload: { resume?: string; secondResume?: string; immediate?: boolean }): void;
   /** P1-5: fold a finished Q&A into the rolling memo ('' = keep the old one) */
   memoUpdate(p: { memo: string; question: string; answer: string }): Promise<string>;
   onLlmEvent(cb: (ev: LlmEvent) => void): () => void;
@@ -98,6 +93,7 @@ const api: McApi = {
   loadSessions: () => ipcRenderer.invoke(IPC.sessionsLoad),
   saveSessions: (data) => ipcRenderer.send(IPC.sessionsSave, data),
   setStealth: (on) => ipcRenderer.invoke(IPC.stealthSet, on),
+  setWindowFocusable: (on) => ipcRenderer.invoke(IPC.windowFocusableSet, on),
   sendPcm: (buf, captureTs, channel) => ipcRenderer.send(IPC.capturePcm, buf, captureTs, channel),
   captureStarted: () => ipcRenderer.send(IPC.captureStarted),
   captureStopped: () => ipcRenderer.send(IPC.captureStopped),
@@ -110,10 +106,6 @@ const api: McApi = {
   asrReplay: () => ipcRenderer.invoke(IPC.asrReplay),
   llmAsk: (payload) => ipcRenderer.send(IPC.llmAsk, payload),
   shotAsk: (payload) => ipcRenderer.send(IPC.shotAsk, payload),
-  pickRegion: () => ipcRenderer.invoke(IPC.regionPick),
-  regionImage: () => ipcRenderer.invoke(IPC.regionImage),
-  regionRect: (r) => ipcRenderer.send(IPC.regionRect, r),
-  regionCancel: () => ipcRenderer.send(IPC.regionCancel),
   llmCancel: (requestId) => ipcRenderer.send(IPC.llmCancel, requestId),
   prewarm: (payload) => ipcRenderer.send(IPC.llmPrewarm, payload),
   memoUpdate: (p) => ipcRenderer.invoke(IPC.memoUpdate, p),

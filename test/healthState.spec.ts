@@ -49,6 +49,7 @@ function settings(over: Partial<PublicSettings> = {}): PublicSettings {
       stealth: true,
       hotkeyToggle: 'Control+Shift+M',
       hotkeyShot: 'Control+Shift+S',
+      hotkeyQuit: 'Control+Shift+D',
       opacity: 0.94,
       fontScale: 'medium',
       theme: 'dark',

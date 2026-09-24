@@ -35,6 +35,8 @@ describe('SettingsStore', () => {
   it('boots with defaults when no file exists', () => {
     const s = new SettingsStore(file, fakeCipher);
     expect(s.data).toEqual(defaultSettings());
+    expect(s.data.ui.hotkeyQuit).toBe('Control+Shift+D');
+    expect(s.getPublic().ui.hotkeyQuit).toBe('Control+Shift+D');
     expect(s.data.llm.model).toBe('deepseek-chat');
     expect(s.data.llm.answerLang).toBe('chinese');
     expect(s.data.ui.stealth).toBe(true);
@@ -54,11 +56,15 @@ describe('SettingsStore', () => {
 
   it('round-trips a patch to disk', () => {
     const s1 = new SettingsStore(file, fakeCipher);
-    s1.applyPatch({ asr: { language: 'chinese' }, ui: { hotkeyToggle: 'Alt+X' } });
+    s1.applyPatch({
+      asr: { language: 'chinese' },
+      ui: { hotkeyToggle: 'Alt+X', hotkeyQuit: 'Alt+Shift+D' },
+    });
 
     const s2 = new SettingsStore(file, fakeCipher);
     expect(s2.data.asr.language).toBe('chinese');
     expect(s2.data.ui.hotkeyToggle).toBe('Alt+X');
+    expect(s2.data.ui.hotkeyQuit).toBe('Alt+Shift+D');
     // untouched sections keep defaults
     expect(s2.data.llm.baseUrl).toBe('https://api.deepseek.com/v1');
   });
@@ -258,10 +264,14 @@ describe('migrateSettingsV1ToV2 (pure)', () => {
     expect(v2.vision.proxyUrl).toBe('127.0.0.1:7897');
     expect(v2.asr.backend).toBe('cloud-realtime');
     expect(v2.asr.realtime?.baseUrl).toBe(V1_FILE.asr.realtime.baseUrl);
-    // Phase 4 added two ui fields. Everything the user had configured survives
-    // untouched; the new ones arrive with their OFF defaults, so upgrading can
-    // never silently register an existing profile for auto-start.
-    expect(v2.ui).toEqual({ ...V1_FILE.ui, autoLaunch: false, trayNoticeShown: false });
+    // Missing UI fields are filled from defaults. Existing choices survive,
+    // and auto-start remains off for upgraded profiles.
+    expect(v2.ui).toEqual({
+      ...V1_FILE.ui,
+      hotkeyQuit: 'Control+Shift+D',
+      autoLaunch: false,
+      trayNoticeShown: false,
+    });
     expect(v2.audio).toEqual(V1_FILE.audio);
   });
 
@@ -395,14 +405,19 @@ describe('SettingsStore v1 -> v2 load path', () => {
   });
 
   it('loads a v2 file without migrating or backing it up', () => {
-    const v2: SettingsFile = {
-      ...defaultSettings(),
+    const defaults = defaultSettings();
+    const { hotkeyQuit: _hotkeyQuit, ...legacyUi } = defaults.ui;
+    const v2 = {
+      ...defaults,
+      ui: legacyUi,
       onboarding: { schemaVersion: 1, completed: false, lastStep: 3, selectedPlan: 'recommended' },
     };
     writeFileSync(file, JSON.stringify(v2), 'utf8');
     const s = new SettingsStore(file, fakeCipher);
     expect(s.migratedFromV1).toBe(false);
     expect(existsSync(`${file}.bak`)).toBe(false);
+    expect(s.data.ui.hotkeyQuit).toBe('Control+Shift+D');
+    expect(s.getPublic().ui.hotkeyQuit).toBe('Control+Shift+D');
     expect(s.data.onboarding).toEqual({
       schemaVersion: 1,
       completed: false,

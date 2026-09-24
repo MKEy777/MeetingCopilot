@@ -6,9 +6,8 @@
  * user must be able to follow it in a screen share while someone helps them
  * paste an API key.
  *
- * It keeps the main window's navigation hardening though: window.open denied,
- * will-navigate prevented. (The region-selection overlay in main.ts sets
- * neither — that is a precedent to fix, not to copy.)
+ * It keeps the main window's navigation hardening though: window.open denied
+ * and will-navigate prevented.
  */
 import { BrowserWindow } from 'electron';
 import { mkdirSync, writeFileSync } from 'fs';

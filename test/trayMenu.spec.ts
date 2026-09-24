@@ -10,9 +10,10 @@ import {
 } from '../shared/trayMenu';
 import { trayIconPath } from '../electron/tray';
 import { mainStrings } from '../electron/uiStrings';
+import { APP_DISPLAY_NAME } from '../shared/appIdentity';
 
 const labels: TrayMenuLabels = {
-  brand: 'MeetingCopilot',
+  brand: APP_DISPLAY_NAME,
   showWindow: 'show',
   hideWindow: 'hide',
   startCapture: 'start',
@@ -51,7 +52,7 @@ describe('tray menu model', () => {
 
   it('opens with a disabled brand label so the menu identifies the app', () => {
     const [first] = buildTrayMenu(state(), labels);
-    expect(first).toEqual({ id: 'brand', label: 'MeetingCopilot', kind: 'label' });
+    expect(first).toEqual({ id: 'brand', label: APP_DISPLAY_NAME, kind: 'label' });
   });
 
   it('flips the window entry with visibility', () => {
@@ -79,8 +80,10 @@ describe('tray menu model', () => {
   });
 
   it('shows the capture state in the tooltip', () => {
-    expect(trayTooltip(state(), labels)).toBe('MeetingCopilot');
-    expect(trayTooltip(state({ capturing: true }), labels)).toBe('MeetingCopilot · transcribing');
+    expect(trayTooltip(state(), labels)).toBe(APP_DISPLAY_NAME);
+    expect(trayTooltip(state({ capturing: true }), labels)).toBe(
+      `${APP_DISPLAY_NAME} · transcribing`,
+    );
   });
 
   it('routes only renderer-owned actions to the renderer', () => {

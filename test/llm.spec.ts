@@ -23,10 +23,10 @@ import {
   langDirective,
   questionHint,
   smartClip,
-  JD_PRIORITY,
   MAX_BACKGROUND_CHARS,
   MAX_CONTEXT_CHARS,
   MAX_MEMO_CHARS,
+  SECOND_RESUME_PRIORITY,
   RESUME_PRIORITY,
 } from '../electron/llm/prompts';
 
@@ -124,9 +124,23 @@ describe('buildAnswerMessages', () => {
     const joined = JSON.stringify(withCtx);
     expect(joined).not.toContain('实时会议/面试助手');
     expect(joined).not.toContain('帮用户想好接下来怎么回答');
-    // reference material is offered, not a persona
-    expect(joined).toContain('供参考');
+    // interview references carry priority rules without adding the answer persona
+    expect(joined).toContain('优先采用第二简历');
     expect(withCtx[withCtx.length - 1].content).toBe('你是什么模型');
+  });
+
+  it('free mode prefers the second resume and keeps personal experience grounded', () => {
+    const msgs = buildAnswerMessages({
+      mode: 'free',
+      freeQuestion: 'Redis 的持久化方式是什么？',
+      recentTranscript: [],
+      resume: '我做过缓存项目',
+      secondResume: '八股：Redis 支持 RDB 和 AOF',
+    });
+    const system = msgs[0].content as string;
+    expect(system.indexOf('【第二简历】')).toBeLessThan(system.indexOf('【简历】'));
+    expect(system).toContain('冲突时以第二简历为准');
+    expect(system).toContain('不得把参考资料中的示例说成用户亲身经历');
   });
 
   it('answerLang hook steers the reply language (default chinese)', () => {
@@ -200,20 +214,23 @@ describe('buildAnswerMessages history (session coherence)', () => {
   });
 });
 
-describe('dual-slot material injection (resume / JD)', () => {
-  it('injects resume + JD as delimited sections of the system prompt', () => {
+describe('dual-slot material injection (resume / second resume)', () => {
+  it('injects the second resume first as the preferred reference', () => {
     const msgs = buildAnswerMessages({
       mode: 'segment',
       question: 'x',
       recentTranscript: [],
       resume: '我做过一个实时音频转录项目，用 whisper + DirectML。',
-      jd: '岗位职责：负责语音产品研发。',
+      secondResume: '八股：Redis 持久化包括 RDB 和 AOF。',
     });
     const sys = msgs[0].content as string;
     expect(sys).toContain('【简历】');
     expect(sys).toContain('DirectML');
-    expect(sys).toContain('【岗位JD】');
-    expect(sys).toContain('语音产品研发');
+    expect(sys).toContain('【第二简历】');
+    expect(sys).toContain('Redis 持久化');
+    expect(sys.indexOf('【第二简历】')).toBeLessThan(sys.indexOf('【简历】（'));
+    expect(sys).toContain('冲突时以【第二简历】为准');
+    expect(sys).not.toContain('岗位JD');
   });
   it('legacy background is treated as resume material (compat)', () => {
     const msgs = buildAnswerMessages({
@@ -231,7 +248,7 @@ describe('dual-slot material injection (resume / JD)', () => {
     const sys = msgs[0].content as string;
     // the persona text may mention 【简历】 in its rules — check section headers
     expect(sys).not.toContain('【简历】（');
-    expect(sys).not.toContain('【岗位JD】（');
+    expect(sys).not.toContain('【第二简历】（');
     expect(sys).not.toContain('【简历结束】');
   });
   it('caps oversized material to the char budget', () => {
@@ -247,11 +264,11 @@ describe('dual-slot material injection (resume / JD)', () => {
       question: 'Hello',
       recentTranscript: [],
       resume: '机密简历内容',
-      jd: '机密JD内容',
+      secondResume: '机密第二简历内容',
     });
     const joined = JSON.stringify(msgs);
     expect(joined).not.toContain('机密简历内容');
-    expect(joined).not.toContain('机密JD内容');
+    expect(joined).not.toContain('机密第二简历内容');
   });
 });
 
@@ -269,7 +286,7 @@ describe('buildStablePrefix (prefix-cache friendliness)', () => {
       question: 'q',
       recentTranscript: ['a'],
       resume: 'R',
-      jd: 'J',
+      secondResume: 'J',
       answerLang: 'english',
     });
     expect(msgs[0].content).toBe(prefix);
@@ -285,13 +302,13 @@ describe('smartClip (priority-aware budget truncation)', () => {
   it('returns text unchanged when under budget', () => {
     expect(smartClip('短文本', 100, RESUME_PRIORITY)).toBe('短文本');
   });
-  it('keeps priority paragraphs (project experience / JD requirements) over filler', () => {
+  it('keeps interview reference paragraphs over filler', () => {
     const filler = '自我评价：热爱学习。'.repeat(30); // ~300 chars, no keyword
-    const proj = '项目经历：做了实时转录系统，负责 ASR 链路。';
-    const text = `${filler}\n\n${proj}\n\n${filler}`;
-    const out = smartClip(text, proj.length + 10, JD_PRIORITY.test(proj) ? JD_PRIORITY : RESUME_PRIORITY);
-    expect(out).toContain('项目经历');
-    expect(out.length).toBeLessThanOrEqual(proj.length + 10);
+    const reference = 'Redis 八股：RDB 是快照，AOF 记录写命令。';
+    const text = `${filler}\n\n${reference}\n\n${filler}`;
+    const out = smartClip(text, reference.length + 10, SECOND_RESUME_PRIORITY);
+    expect(out).toContain('Redis 八股');
+    expect(out.length).toBeLessThanOrEqual(reference.length + 10);
   });
   it('hard-slices a single oversized paragraph', () => {
     expect(smartClip('A'.repeat(500), 100, RESUME_PRIORITY)).toHaveLength(100);
@@ -326,6 +343,12 @@ describe('classifyQuestion + questionHint', () => {
       recentTranscript: [],
     });
     expect(msgs[msgs.length - 1].content).toContain('题型：技术题');
+    expect(msgs[msgs.length - 1].content).toContain('第二简历中的八股');
+  });
+  it('uses the second resume in the behavioral hint before personal resume fallback', () => {
+    const hint = questionHint('behavioral');
+    expect(hint).toContain('优先参考第二简历');
+    expect(hint).toContain('简历里的真实经历');
   });
 });
 
@@ -351,14 +374,14 @@ describe('buildMemoUpdateMessages / clampMemo (P1-5 pure logic)', () => {
 
 describe('buildPrewarmMessages (P1-6 prefix-cache warm)', () => {
   it('system message is byte-identical to real answer requests', () => {
-    const prefix = buildStablePrefix('简历', 'JD', 'chinese');
+    const prefix = buildStablePrefix('简历', '第二简历资料', 'chinese');
     const warm = buildPrewarmMessages(prefix);
     const real = buildAnswerMessages({
       mode: 'segment',
       question: 'q',
       recentTranscript: [],
       resume: '简历',
-      jd: 'JD',
+      secondResume: '第二简历资料',
     });
     expect(warm[0].role).toBe('system');
     expect(warm[0].content).toBe(real[0].content);
@@ -449,6 +472,20 @@ describe('buildVisionMessages', () => {
     const msgs = buildVisionMessages('  ', 'data:image/png;base64,AAA');
     const content = msgs[1].content as Array<{ type: string; text?: string }>;
     expect(content[1].text).toContain('要点');
+  });
+
+  it('uses the second resume before the personal resume as reference material', () => {
+    const msgs = buildVisionMessages('回答截图中的问题', 'data:image/png;base64,AAA', '个人项目经历', '第二简历八股');
+    const system = msgs[0].content as string;
+    expect(system.indexOf('第二简历八股')).toBeLessThan(system.indexOf('个人项目经历'));
+    expect(system).toContain('【第二简历】');
+  });
+
+  it('keeps both reference slots within the shared background budget', () => {
+    const msgs = buildVisionMessages('回答截图中的问题', 'data:image/png;base64,AAA', 'R'.repeat(9000), 'S'.repeat(9000));
+    const system = msgs[0].content as string;
+    expect(system.match(/R/g)?.length).toBe(3000);
+    expect(system.match(/S/g)?.length).toBe(5000);
   });
 });
 

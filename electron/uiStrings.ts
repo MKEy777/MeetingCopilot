@@ -1,17 +1,17 @@
 import type { UiLang } from '../shared/protocol';
 import type { TrayMenuLabels } from '../shared/trayMenu';
+import { APP_DISPLAY_NAME } from '../shared/appIdentity';
 
 /**
- * Main-process user-facing strings (dialogs, overlay tip, high-visibility
+ * Main-process user-facing strings (dialogs and high-visibility
  * errors). The renderer chrome has its own dictionary in src/i18n.tsx; deep
  * engine diagnostics stay untranslated on purpose.
  */
 const zh = {
-  regionTip: '拖动框选要识别的区域 · Esc 取消',
   kbImportTitle: '导入个人知识库（.md / .txt）',
   docFilter: '文档',
   pickResumeTitle: '导入我的简历（md/txt/docx/pdf）',
-  pickJdTitle: '导入岗位JD（md/txt/docx/pdf）',
+  pickSecondResumeTitle: '导入第二简历或面试参考资料（md/txt/docx/pdf）',
   noApiKey: '未设置 API Key，请在设置里填入后重试',
   noApiKeyShort: '未设置 API Key',
   noVision: '未配置视觉模型：请在设置里填 Vision Base URL / 模型 / Key（如 MiMo / Gemini）',
@@ -23,7 +23,7 @@ const zh = {
   setupQuitConfirm: '退出',
   setupQuitCancel: '继续配置',
   tray: {
-    brand: 'MeetingCopilot',
+    brand: APP_DISPLAY_NAME,
     showWindow: '显示窗口',
     hideWindow: '隐藏窗口',
     startCapture: '开始转写',
@@ -36,18 +36,17 @@ const zh = {
     quit: '退出',
     capturing: '转写中',
   } satisfies TrayMenuLabels,
-  trayNoticeTitle: 'MeetingCopilot 仍在运行',
+  trayNoticeTitle: `${APP_DISPLAY_NAME} 仍在运行`,
   trayNoticeBody: '窗口已隐藏，可从系统托盘图标重新打开；托盘菜单里也能直接退出。',
 };
 
 type MainDict = typeof zh;
 
 const en: MainDict = {
-  regionTip: 'Drag to select a region · Esc to cancel',
   kbImportTitle: 'Import personal knowledge base (.md / .txt)',
   docFilter: 'Documents',
   pickResumeTitle: 'Import my resume (md/txt/docx/pdf)',
-  pickJdTitle: 'Import the job description (md/txt/docx/pdf)',
+  pickSecondResumeTitle: 'Import a second resume or interview reference (md/txt/docx/pdf)',
   noApiKey: 'API Key not set — add one in Settings and retry',
   noApiKeyShort: 'API Key not set',
   noVision: 'Vision model not configured: set the Vision Base URL / model / key in Settings (e.g. MiMo / Gemini)',
@@ -59,7 +58,7 @@ const en: MainDict = {
   setupQuitConfirm: 'Quit',
   setupQuitCancel: 'Keep setting up',
   tray: {
-    brand: 'MeetingCopilot',
+    brand: APP_DISPLAY_NAME,
     showWindow: 'Show window',
     hideWindow: 'Hide window',
     startCapture: 'Start transcription',
@@ -72,7 +71,7 @@ const en: MainDict = {
     quit: 'Quit',
     capturing: 'transcribing',
   },
-  trayNoticeTitle: 'MeetingCopilot is still running',
+  trayNoticeTitle: `${APP_DISPLAY_NAME} is still running`,
   trayNoticeBody:
     'The window is hidden — reopen it from the tray icon. The tray menu also has Quit.',
 };

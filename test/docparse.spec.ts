@@ -6,7 +6,7 @@ import { DOC_EXTENSIONS, extractDocText, normalizeDocText } from '../electron/do
 
 const FIX = join(__dirname, 'fixtures');
 
-describe('extractDocText (deterministic resume/JD parsing)', () => {
+describe('extractDocText (deterministic resume/reference parsing)', () => {
   // mammoth/pdf-parse cold-load can exceed vitest default; observed 43 s+ on slow GitHub Windows runners
   it('reads a .docx via mammoth (zh + en)', { timeout: 120_000 }, async () => {
     const text = await extractDocText(join(FIX, 'sample.docx'));

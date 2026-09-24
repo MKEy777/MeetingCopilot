@@ -7,6 +7,7 @@ import type {
   PublicSettings,
   StoredSession,
 } from '../shared/protocol';
+import { APP_DISPLAY_NAME } from '../shared/appIdentity';
 import {
   appendSegment,
   nextSegmentId,
@@ -15,6 +16,7 @@ import {
   type TranscriptSegment,
 } from '../shared/transcript';
 import { isLikelyQuestion } from '../shared/textHeuristics';
+import { normalizeSessionMaterial } from '../shared/sessionMigration';
 import { captureKindForPlatform } from '../shared/platform';
 import { deriveServiceHealth } from '../shared/healthState';
 import { LoopbackCapture } from './audio/loopbackCapture';
@@ -54,13 +56,6 @@ const uid = (p: string) => `${p}-${++seq}-${Date.now()}`;
 
 function newSession(name: string): StoredSession {
   return { id: uid('s'), name, createdAt: Date.now(), turns: [], segments: [] };
-}
-
-/** legacy single-slot KB → resume slot (dual-slot material, P0-2) */
-function migrateKbSlots(s: StoredSession, fallbackName: string): StoredSession {
-  if (!s.kbText || s.resumeText) return s;
-  const { kbName, kbText, ...rest } = s;
-  return { ...rest, resumeName: kbName ?? fallbackName, resumeText: kbText };
 }
 
 /** first-question topic → a short session title */
@@ -110,6 +105,51 @@ export function App() {
   sessionsRef.current = sessions;
   currentIdRef.current = currentId;
 
+  // The main overlay is created as a non-activating window so clicking its
+  // controls does not take focus away from the presentation app. Text inputs
+  // are the intentional exception: briefly make the window focusable, focus
+  // the clicked control, and restore the overlay behavior after editing.
+  useEffect(() => {
+    const isTextControl = (target: EventTarget | null): target is HTMLElement => {
+      if (target instanceof HTMLTextAreaElement) return true;
+      if (target instanceof HTMLInputElement) {
+        return !['button', 'checkbox', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(
+          target.type,
+        );
+      }
+      return target instanceof HTMLElement && target.isContentEditable;
+    };
+
+    const restoreOverlayBehavior = (force = false) => {
+      window.setTimeout(() => {
+        if (force || !isTextControl(document.activeElement)) {
+          void window.mc.setWindowFocusable(false);
+        }
+      }, 0);
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!isTextControl(event.target)) return;
+      const target = event.target as HTMLElement;
+      // Keep the browser's normal click/caret placement, then explicitly
+      // focus the control after the native window accepts focus again.
+      void window.mc.setWindowFocusable(true).then(() => {
+        if (document.contains(target)) target.focus();
+      });
+    };
+
+    const onDocumentFocusOut = () => restoreOverlayBehavior();
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('focusout', onDocumentFocusOut, true);
+    const onWindowBlur = () => restoreOverlayBehavior(true);
+    window.addEventListener('blur', onWindowBlur);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('focusout', onDocumentFocusOut, true);
+      window.removeEventListener('blur', onWindowBlur);
+    };
+  }, []);
+
   const current = useMemo(
     () => sessions.find((s) => s.id === currentId) ?? null,
     [sessions, currentId],
@@ -140,12 +180,12 @@ export function App() {
     ]);
   }, []);
 
-  /** current session's dual-slot material (resume / JD / rolling memo) */
-  const currentMaterial = useCallback((): { resume?: string; jd?: string; memo?: string } => {
+  /** current session's dual-slot material (resume / second resume / memo) */
+  const currentMaterial = useCallback((): { resume?: string; secondResume?: string; memo?: string } => {
     const s = sessionsRef.current.find((x) => x.id === currentIdRef.current);
     return {
       resume: s?.resumeText || undefined,
-      jd: s?.jdText || undefined,
+      secondResume: s?.secondResumeText || undefined,
       memo: s?.memo || undefined,
     };
   }, []);
@@ -154,7 +194,7 @@ export function App() {
   const prewarm = useCallback(
     (immediate: boolean) => {
       const m = currentMaterial();
-      window.mc.prewarm({ resume: m.resume, jd: m.jd, immediate });
+      window.mc.prewarm({ resume: m.resume, secondResume: m.secondResume, immediate });
     },
     [currentMaterial],
   );
@@ -240,16 +280,20 @@ export function App() {
       });
       maybeTitle(sid, question || tRef.current.app.shotQuestion);
       const m = currentMaterial();
-      const background = [m.resume, m.jd].filter(Boolean).join('\n\n') || undefined;
-      window.mc.shotAsk({ requestId, question, background, imageDataUrl });
+      window.mc.shotAsk({
+        requestId,
+        question,
+        resume: m.resume,
+        secondResume: m.secondResume,
+        imageDataUrl,
+      });
     },
     [appendTurn, currentMaterial, maybeTitle],
   );
 
-  /** region screenshot flow (📷 button or hotkey): drag a region, then ask */
-  const doRegionShot = useCallback(async () => {
-    const img = await window.mc.pickRegion();
-    if (img) askShot('', img);
+  /** full-screen screenshot flow (📷 button or hotkey): capture and ask */
+  const doScreenShot = useCallback(() => {
+    askShot('');
   }, [askShot]);
 
   // ---- boot: load settings + sessions ----
@@ -264,7 +308,7 @@ export function App() {
         // engine rebuild — translations then landed on multiple bubbles)
         setSessions(
           f.sessions.map((s) =>
-            migrateKbSlots(
+            normalizeSessionMaterial(
               { ...s, segments: reindexSegments(s.segments ?? []) },
               tRef.current.app.legacyKbName,
             ),
@@ -356,7 +400,7 @@ export function App() {
       }
     });
 
-    const offShot = window.mc.onShotHotkey(() => void doRegionShot());
+    const offShot = window.mc.onShotHotkey(() => doScreenShot());
 
     window.__mcAutoStart = () => void startCapture();
     // visual-QA hooks (MC_MAIN_SHOT in electron/main.ts): open a panel from the
@@ -654,13 +698,13 @@ export function App() {
       patchSession(currentIdRef.current, (s) =>
         slot === 'resume'
           ? { ...s, resumeName: r.name, resumeText: r.text }
-          : { ...s, jdName: r.name, jdText: r.text },
+          : { ...s, secondResumeName: r.name, secondResumeText: r.text },
       );
       // material changed → reheat the prefix cache with the fresh bytes;
       // patchSession is async (React state), so pass the new slots directly
       window.mc.prewarm({
         resume: slot === 'resume' ? r.text : currentMaterial().resume,
-        jd: slot === 'jd' ? r.text : currentMaterial().jd,
+        secondResume: slot === 'secondResume' ? r.text : currentMaterial().secondResume,
         immediate: true,
       });
     },
@@ -672,12 +716,12 @@ export function App() {
       patchSession(currentIdRef.current, (s) =>
         slot === 'resume'
           ? { ...s, resumeName: undefined, resumeText: undefined }
-          : { ...s, jdName: undefined, jdText: undefined },
+          : { ...s, secondResumeName: undefined, secondResumeText: undefined },
       );
       // prefix went stale; reheats now if capturing, else at the next ▶
       window.mc.prewarm({
         resume: slot === 'resume' ? undefined : currentMaterial().resume,
-        jd: slot === 'jd' ? undefined : currentMaterial().jd,
+        secondResume: slot === 'secondResume' ? undefined : currentMaterial().secondResume,
       });
     },
     [patchSession, currentMaterial],
@@ -719,7 +763,7 @@ export function App() {
     <I18nProvider lang={settings?.ui.lang}>
     <div className="app">
       <header className="titlebar">
-        <span className="brand">MeetingCopilot</span>
+          <span className="brand">{APP_DISPLAY_NAME}</span>
         <div className="titlebar-actions">
           <button
             className={capturing ? 'btn btn-live' : 'btn btn-primary'}
@@ -905,8 +949,8 @@ export function App() {
           turns={current?.turns ?? []}
           resumeName={current?.resumeName}
           resumeChars={current?.resumeText?.length ?? 0}
-          jdName={current?.jdName}
-          jdChars={current?.jdText?.length ?? 0}
+          secondResumeName={current?.secondResumeName}
+          secondResumeChars={current?.secondResumeText?.length ?? 0}
           notice={kbNotice}
           visionReady={visionReady}
           answersReady={answersReady}
