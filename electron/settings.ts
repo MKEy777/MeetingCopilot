@@ -66,6 +66,7 @@ export function defaultSettings(platform: string = process.platform): SettingsFi
       // — too slow for a live copilot (measured 2026-07-09).
       model: 'deepseek-chat',
       answerLang: 'chinese',
+      answerCustomPrompt: '',
       answerWithVision: false,
     },
     vision: {},
@@ -402,6 +403,7 @@ export class SettingsStore {
         baseUrl: d.llm.baseUrl,
         model: d.llm.model,
         answerLang: d.llm.answerLang,
+        answerCustomPrompt: d.llm.answerCustomPrompt ?? '',
         answerWithVision: !!d.llm.answerWithVision,
         apiKeySet: !!d.llm.apiKeyEnc,
         providerId: d.llm.providerId,

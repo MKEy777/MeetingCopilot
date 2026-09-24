@@ -168,6 +168,12 @@ export function App() {
   const themInputRef = useRef<MicCapture | null>(null);
   const micRef = useRef<MicCapture | null>(null);
   const settingsRef = useRef<PublicSettings | null>(null);
+  const previewWindowOpacity = useCallback((opacity: number | null) => {
+    const value = opacity ?? settingsRef.current?.ui.opacity ?? 0.94;
+    void window.mc.setWindowOpacity(value).catch((error) => {
+      console.warn('[ui] window opacity update failed:', (error as Error).message);
+    });
+  }, []);
   const e2eSamples = useRef<number[]>([]);
   const sessionsRef = useRef<StoredSession[]>([]);
   const currentIdRef = useRef<string>('');
@@ -1430,6 +1436,7 @@ export function App() {
             setShowSettings(false);
             setShowHelp(true);
           }}
+          onOpacityPreview={previewWindowOpacity}
         />
       )}
 

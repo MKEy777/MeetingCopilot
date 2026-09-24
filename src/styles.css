@@ -779,7 +779,8 @@ body {
 }
 
 .settings-row input,
-.settings-row select {
+.settings-row select,
+.settings-row textarea {
   background: var(--input-bg);
   border: 1px solid var(--btn-border);
   border-radius: 6px;
@@ -790,8 +791,38 @@ body {
 }
 
 .settings-row input:focus,
-.settings-row select:focus {
+.settings-row select:focus,
+.settings-row textarea:focus {
   border-color: var(--accent);
+}
+
+.settings-row textarea {
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.opacity-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-row input.opacity-slider {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
+
+.opacity-control output {
+  min-width: 40px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: right;
 }
 
 .settings-section {

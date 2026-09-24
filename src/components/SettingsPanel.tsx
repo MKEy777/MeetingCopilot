@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   AnswerLang,
   AsrLanguage,
@@ -120,6 +120,7 @@ export function SettingsPanel({
   onRerunWizard,
   onOpenDiagnostics,
   onOpenHelp,
+  onOpacityPreview,
 }: {
   settings: PublicSettings;
   onSaved: (s: PublicSettings) => void;
@@ -130,11 +131,13 @@ export function SettingsPanel({
   onOpenDiagnostics?: () => void;
   /** in-app help center (also reachable from the tray) */
   onOpenHelp?: () => void;
+  onOpacityPreview: (opacity: number | null) => void;
 }) {
   const t = useT();
   const [baseUrl, setBaseUrl] = useState(settings.llm.baseUrl);
   const [model, setModel] = useState(settings.llm.model);
   const [answerLang, setAnswerLang] = useState<AnswerLang>(settings.llm.answerLang);
+  const [answerCustomPrompt, setAnswerCustomPrompt] = useState(settings.llm.answerCustomPrompt ?? '');
   const [language, setLanguage] = useState<AsrLanguage>(settings.asr.language);
   const [hotkey, setHotkey] = useState(settings.ui.hotkeyToggle);
   const [hotkeyQuit, setHotkeyQuit] = useState(settings.ui.hotkeyQuit);
@@ -153,6 +156,7 @@ export function SettingsPanel({
   const [autoLaunch, setAutoLaunch] = useState(settings.ui.autoLaunch);
   const [fontScale, setFontScale] = useState<FontScale>(settings.ui.fontScale ?? 'medium');
   const [theme, setTheme] = useState<ThemeMode>(settings.ui.theme ?? 'dark');
+  const [opacity, setOpacity] = useState(Math.min(1, Math.max(0.4, settings.ui.opacity ?? 0.94)));
   const [uiLang, setUiLang] = useState<UiLang>(settings.ui.lang);
   const [themDeviceId, setThemDeviceId] = useState(settings.audio.themDeviceId ?? '');
   const [micDeviceId, setMicDeviceId] = useState(settings.audio.micDeviceId ?? '');
@@ -160,6 +164,7 @@ export function SettingsPanel({
   const [saving, setSaving] = useState(false);
   /** weak-crypto confirmation is pending; nothing has been sent to main yet */
   const [confirmWeak, setConfirmWeak] = useState(false);
+  const opacitySaved = useRef(false);
 
   const llmKey = useKeySlot();
   const visionKey = useKeySlot();
@@ -176,6 +181,10 @@ export function SettingsPanel({
   const [tests, setTests] = useState<Partial<Record<ProviderSlot, SlotTest>>>({});
   const anyTesting = Object.values(tests).some((s) => s?.testing);
   const resultCopy = connectionResultCopy(t);
+
+  useEffect(() => () => {
+    if (!opacitySaved.current) onOpacityPreview(null);
+  }, [onOpacityPreview]);
 
   useEffect(() => {
     void listMics()
@@ -257,6 +266,7 @@ export function SettingsPanel({
           baseUrl: baseUrl.trim(),
           model: model.trim(),
           answerLang,
+          answerCustomPrompt,
           providerId: providerIdForEndpoint(baseUrl.trim(), model.trim(), 'text-llm'),
           ...(llmApiKey !== undefined ? { apiKey: llmApiKey } : {}),
         },
@@ -304,6 +314,7 @@ export function SettingsPanel({
           hotkeyToggle: hotkey.trim(),
           hotkeyShot: hotkeyShot.trim(),
           hotkeyQuit: hotkeyQuit.trim(),
+          opacity,
           fontScale,
           theme,
           lang: uiLang,
@@ -318,6 +329,7 @@ export function SettingsPanel({
       visionKey.reset();
       cloudKey.reset();
       rtKey.reset();
+      opacitySaved.current = true;
       onSaved(next);
     } finally {
       setSaving(false);
@@ -607,6 +619,18 @@ export function SettingsPanel({
           <option value="english">{t.settings.answerLangEn}</option>
         </select>
       </div>
+      <div className="settings-row">
+        <label htmlFor="answer-custom-prompt">{t.settings.answerCustomPromptLabel}</label>
+        <textarea
+          id="answer-custom-prompt"
+          rows={4}
+          value={answerCustomPrompt}
+          onChange={(e) => setAnswerCustomPrompt(e.target.value)}
+          spellCheck={false}
+          placeholder={t.settings.answerCustomPromptPlaceholder}
+        />
+        <span className="settings-inline-hint">{t.settings.answerCustomPromptHint}</span>
+      </div>
 
       <div className="settings-row">
         <label>{t.settings.uiLang}</label>
@@ -630,6 +654,28 @@ export function SettingsPanel({
           <option value="medium">{t.settings.fontMedium}</option>
           <option value="large">{t.settings.fontLarge}</option>
         </select>
+      </div>
+      <div className="settings-row">
+        <label htmlFor="ui-opacity">{t.settings.opacityLabel}</label>
+        <div className="opacity-control">
+          <input
+            className="opacity-slider"
+            id="ui-opacity"
+            type="range"
+            min="40"
+            max="100"
+            step="1"
+            value={Math.round(opacity * 100)}
+            onChange={(e) => {
+              const next = Number(e.target.value) / 100;
+              setOpacity(next);
+              onOpacityPreview(next);
+            }}
+            aria-valuetext={`${Math.round(opacity * 100)}%`}
+          />
+          <output htmlFor="ui-opacity">{Math.round(opacity * 100)}%</output>
+        </div>
+        <span className="settings-inline-hint">{t.settings.opacityHint}</span>
       </div>
 
       <div className="settings-row">

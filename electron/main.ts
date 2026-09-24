@@ -500,6 +500,7 @@ function bootstrap(): void {
     // window as the OS foreground window even when the overlay is clicked.
     // Renderer text controls temporarily opt back into focus through IPC.
     win.setFocusable(false);
+    win.setOpacity(Math.min(1, Math.max(0.4, settings.data.ui.opacity ?? 0.94)));
     win.on('will-resize', (event, newBounds) => {
       if (!mousePassthrough) return;
       logPassthroughWindow('will-resize', { newBounds, lockedSize: passthroughLockedSize });
@@ -798,7 +799,12 @@ function bootstrap(): void {
     function stablePrefixFor(resume?: string, secondResume?: string): string {
       const hasMaterial = !!(resume || secondResume);
       const effResume = resume || (hasMaterial ? '' : knowledge.text);
-      return buildStablePrefix(effResume, secondResume ?? '', settings.data.llm.answerLang);
+      return buildStablePrefix(
+        effResume,
+        secondResume ?? '',
+        settings.data.llm.answerLang,
+        settings.data.llm.answerCustomPrompt,
+      );
     }
 
     async function doPrewarm(prefix: string, reason: string): Promise<void> {
@@ -897,6 +903,9 @@ function bootstrap(): void {
       const asrLanguageChanged =
         asrPatch?.language !== undefined && asrPatch.language !== currentAsr.language;
       settings.applyPatch(patch);
+      if (patch.ui?.opacity !== undefined) {
+        win?.setOpacity(Math.min(1, Math.max(0.4, patch.ui.opacity)));
+      }
       if (
         patch.ui?.hotkeyToggle !== undefined ||
         patch.ui?.hotkeyShot !== undefined ||
@@ -1143,6 +1152,12 @@ function bootstrap(): void {
       }));
       return focusable;
     });
+    ipcMain.handle(IPC.windowOpacitySet, (event, incoming: number) => {
+      if (event.sender !== win?.webContents) return win?.getOpacity() ?? 0.94;
+      const opacity = Number.isFinite(incoming) ? Math.min(1, Math.max(0.4, incoming)) : 0.94;
+      win?.setOpacity(opacity);
+      return opacity;
+    });
     ipcMain.handle(IPC.mousePassthroughSet, (_e, on: boolean) => setMousePassthrough(!!on));
     ipcMain.on(IPC.mousePassthroughDragStart, (event, point: { x: number; y: number }) => {
       if (event.sender !== win?.webContents || !mousePassthrough) return;
@@ -1190,6 +1205,7 @@ function bootstrap(): void {
         freeQuestion: payload.freeQuestion,
         recentTranscript: payload.recentTranscript,
         answerLang: payload.answerLang ?? settings.data.llm.answerLang,
+        answerCustomPrompt: isTranslate ? undefined : settings.data.llm.answerCustomPrompt,
         history: payload.history,
         resume: isTranslate ? undefined : payload.resume,
         secondResume: isTranslate ? undefined : payload.secondResume,
@@ -1332,6 +1348,7 @@ function bootstrap(): void {
                 dataUrl,
                 payload.resume || (hasMaterial ? undefined : knowledge.text),
                 payload.secondResume,
+                settings.data.llm.answerCustomPrompt,
               ),
               ac.signal,
             ),

@@ -5,7 +5,7 @@
  * line to Chinese. Answer language (zh/en) is a runtime prompt hook.
  *
  * v2 (2026-07-10): cache-friendly three-layer layout —
- *   stable prefix  = persona + 【第二简历】 + 【简历】 + lang directive
+ *   stable prefix  = persona + 【第二简历】 + 【简历】 + lang + answer preferences
  *                    (BYTE-STABLE across requests → DeepSeek prefix cache)
  *   slow state     = 【面试备忘】memo (updated every few turns)
  *   fast context   = history turns + recent transcript + this question + hint
@@ -48,7 +48,12 @@ const PERSONA = [
  * the LLM prewarm request and every real request share this prefix so the
  * provider's prefix cache (DeepSeek 0.1x pricing + faster prefill) hits.
  */
-export function buildStablePrefix(resume: string, secondResume: string, lang: AnswerLang): string {
+export function buildStablePrefix(
+  resume: string,
+  secondResume: string,
+  lang: AnswerLang,
+  answerCustomPrompt = '',
+): string {
   const parts = [...PERSONA];
   const r = resume.trim();
   const sr = secondResume.trim();
@@ -69,6 +74,14 @@ export function buildStablePrefix(resume: string, secondResume: string, lang: An
     );
   }
   parts.push('', langDirective(lang));
+  const customPrompt = answerCustomPrompt.trim();
+  if (customPrompt) {
+    parts.push(
+      '',
+      '【个性化回答要求】（回答时优先遵循；事实必须准确，题目明确要求的输出格式优先）',
+      customPrompt,
+    );
+  }
   return parts.join('\n');
 }
 
@@ -156,6 +169,8 @@ export interface AnswerPromptInput {
   background?: string;
   /** rolling interview memo (P1) — slow-changing block, its own message */
   memo?: string;
+  /** user-defined answer preferences; omitted for translation */
+  answerCustomPrompt?: string;
 }
 
 /** Keep the most recent lines within the char budget (oldest dropped first). */
@@ -193,6 +208,7 @@ export function buildVisionMessages(
   imageDataUrl: string,
   resume?: string,
   secondResume?: string,
+  answerCustomPrompt?: string,
 ): ChatMessage[] {
   const r = (resume ?? '').trim();
   const sr = (secondResume ?? '').trim();
@@ -215,6 +231,9 @@ export function buildVisionMessages(
     '1. 直接输出简洁、准确、可以照着回答的答案。\n' +
     '2. 如果是选择题，只输出正确选项或选项内容。\n' +
     '3. 不输出分类结果、长篇分析、推理过程或“答案如下”等前缀。\n\n' +
+    (answerCustomPrompt?.trim()
+      ? `问答个性化要求（仅对问答题生效；编程题仍按上述代码格式作答）：\n${answerCustomPrompt.trim()}\n\n`
+      : '') +
     '回答优先采用第二简历。两份资料冲突时以第二简历为准；不得把参考资料中的示例说成用户亲身经历。与截图问题无关的参考资料不要加入答案。' +
     (references.length
       ? `\n\n===== 面试参考资料 =====\n${references.join('\n\n')}\n===== 资料结束 =====`
@@ -264,13 +283,23 @@ export function buildAnswerMessages(input: AnswerPromptInput): ChatMessage[] {
         ].join('\n'),
       });
     }
+    const customPrompt = input.answerCustomPrompt?.trim();
+    if (customPrompt) {
+      msgs.push({
+        role: 'system',
+        content: `【个性化回答要求】（回答时优先遵循；事实必须准确，题目明确要求的输出格式优先）\n${customPrompt}`,
+      });
+    }
     msgs.push(...(input.history ?? []));
     msgs.push({ role: 'user', content: (input.freeQuestion ?? '').trim() });
     return msgs;
   }
 
   // segment / continuous: teleprompter with the stable prefix
-  const msgs: ChatMessage[] = [{ role: 'system', content: buildStablePrefix(resume, secondResume, lang) }];
+  const msgs: ChatMessage[] = [{
+    role: 'system',
+    content: buildStablePrefix(resume, secondResume, lang, input.answerCustomPrompt),
+  }];
 
   const memo = (input.memo ?? '').trim();
   if (memo) {

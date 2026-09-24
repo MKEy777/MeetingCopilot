@@ -29,6 +29,7 @@ function settings(over: Partial<PublicSettings> = {}): PublicSettings {
       baseUrl: 'https://api.deepseek.com/v1',
       model: 'deepseek-chat',
       answerLang: 'chinese',
+      answerCustomPrompt: '',
       answerWithVision: false,
       apiKeySet: true,
     },

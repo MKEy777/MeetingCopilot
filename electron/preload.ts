@@ -39,6 +39,7 @@ export interface McApi {
   setStealth(on: boolean): Promise<boolean>;
   /** Enable focus only while the user is editing a text control. */
   setWindowFocusable(on: boolean): Promise<boolean>;
+  setWindowOpacity(opacity: number): Promise<number>;
   setMousePassthrough(on: boolean): Promise<boolean>;
   onMousePassthroughEvent(cb: (event: PassthroughMouseEvent) => void): () => void;
   onMousePassthroughState(cb: (state: PassthroughMouseState) => void): () => void;
@@ -106,6 +107,7 @@ const api: McApi = {
   saveSessions: (data) => ipcRenderer.send(IPC.sessionsSave, data),
   setStealth: (on) => ipcRenderer.invoke(IPC.stealthSet, on),
   setWindowFocusable: (on) => ipcRenderer.invoke(IPC.windowFocusableSet, on),
+  setWindowOpacity: (opacity) => ipcRenderer.invoke(IPC.windowOpacitySet, opacity),
   setMousePassthrough: (on) => ipcRenderer.invoke(IPC.mousePassthroughSet, on),
   onMousePassthroughEvent: (cb) => {
     const listener = (_e: Electron.IpcRendererEvent, event: PassthroughMouseEvent) => cb(event);

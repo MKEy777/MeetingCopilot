@@ -188,6 +188,8 @@ export interface SettingsFile {
     model: string;
     /** reply language for AI answers (R: 模式选择); default chinese */
     answerLang: AnswerLang;
+    /** additional user preferences for question-answering responses */
+    answerCustomPrompt?: string;
     /** answer with the vision/multimodal provider instead of the text model */
     answerWithVision?: boolean;
     /** encrypted-at-rest (safeStorage, base64); never exposed raw to renderer */
@@ -286,6 +288,7 @@ export interface PublicSettings {
     baseUrl: string;
     model: string;
     answerLang: AnswerLang;
+    answerCustomPrompt: string;
     answerWithVision: boolean;
     apiKeySet: boolean;
     providerId?: ProviderId;
@@ -350,6 +353,7 @@ export interface SettingsPatch {
     baseUrl?: string;
     model?: string;
     answerLang?: AnswerLang;
+    answerCustomPrompt?: string;
     answerWithVision?: boolean;
     apiKey?: string;
     providerId?: ProviderId;
@@ -565,6 +569,8 @@ export const IPC = {
   stealthSet: 'stealth:set',
   /** invoke: (boolean) => boolean — temporarily enables main-window focus for text editing */
   windowFocusableSet: 'window:focusable-set',
+  /** invoke: (number) => number — sets native main-window opacity */
+  windowOpacitySet: 'window:opacity-set',
   /** invoke: (boolean) => boolean; Windows click-through mode for this run */
   mousePassthroughSet: 'window:mouse-passthrough-set',
   /** main -> renderer: physical mouse input while click-through is enabled */
