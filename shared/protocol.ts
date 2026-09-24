@@ -24,6 +24,23 @@ export type UiLang = 'zh' | 'en';
 /** per-session material slots: personal resume vs second resume */
 export type KbSlot = 'resume' | 'secondResume';
 
+/** Temporary UI input diagnostics; deliberately excludes text and values. */
+export interface UiInputDebugEvent {
+  type: 'pointerdown' | 'pointerup' | 'mousedown' | 'mouseup' | 'click';
+  phase: 'capture' | 'bubble';
+  targetTag: string;
+  targetId?: string;
+  isTrusted: boolean;
+  defaultPrevented: boolean;
+  button?: number;
+  pointerType?: string;
+}
+
+/** Main-process signal for a Windows non-activating click sequence. */
+export interface UiNativeMouseActivation {
+  at: number;
+}
+
 /** outcome of a provider connection test (Phase 3 runs them; the settings
  * schema stores the last result so the UI can show it after a restart) */
 export type ProviderTestCode =
@@ -534,6 +551,10 @@ export const IPC = {
   stealthSet: 'stealth:set',
   /** invoke: (boolean) => boolean — temporarily enables main-window focus for text editing */
   windowFocusableSet: 'window:focusable-set',
+  /** send: sanitized renderer pointer events for diagnosing overlay clicks */
+  uiInputDebug: 'debug:ui-input',
+  /** main -> renderer: a Windows click began on an inactive overlay */
+  uiNativeMouseActivation: 'debug:ui-native-mouse-activation',
   /** send: hide window */
   winHide: 'win:hide',
   /** send: quit app (clean) */

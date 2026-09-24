@@ -19,6 +19,7 @@ import { isLikelyQuestion } from '../shared/textHeuristics';
 import { normalizeSessionMaterial } from '../shared/sessionMigration';
 import { captureKindForPlatform } from '../shared/platform';
 import { deriveServiceHealth } from '../shared/healthState';
+import { shouldSynthesizeMouseClick } from '../shared/uiInteractionFallback';
 import { LoopbackCapture } from './audio/loopbackCapture';
 import { MicCapture, listMics } from './audio/micCapture';
 import { TranscriptPanel } from './components/TranscriptPanel';
@@ -110,7 +111,34 @@ export function App() {
   // are the intentional exception: briefly make the window focusable, focus
   // the clicked control, and restore the overlay behavior after editing.
   useEffect(() => {
-    const isTextControl = (target: EventTarget | null): target is HTMLElement => {
+    const inputEventTypes = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'] as const;
+    const observedPointerDowns = new Set<number>();
+    const nativeMouseActivations: number[] = [];
+    const unsubscribeNativeMouseActivation = window.mc.onUiNativeMouseActivation(({ at }) => {
+      if (Number.isFinite(at)) nativeMouseActivations.push(at);
+    });
+    const onInputEvent = (event: Event) => {
+      const element = event.target instanceof Element ? event.target : null;
+      const target = element?.closest('button, input, select, textarea, [role="button"], a') ?? element;
+      const mouse = event instanceof MouseEvent ? event : undefined;
+      const pointer = event instanceof PointerEvent ? event : undefined;
+      window.mc.debugUiInput({
+        type: event.type as (typeof inputEventTypes)[number],
+        phase: event.eventPhase === Event.CAPTURING_PHASE ? 'capture' : 'bubble',
+        targetTag: target?.tagName.toLowerCase() ?? 'unknown',
+        targetId: target?.id || undefined,
+        isTrusted: event.isTrusted,
+        defaultPrevented: event.defaultPrevented,
+        ...(mouse ? { button: mouse.button } : {}),
+        ...(pointer ? { pointerType: pointer.pointerType } : {}),
+      });
+    };
+    for (const type of inputEventTypes) {
+      document.addEventListener(type, onInputEvent, true);
+      document.addEventListener(type, onInputEvent, false);
+    }
+
+    const isTextControl = (target: EventTarget | null): boolean => {
       if (target instanceof HTMLTextAreaElement) return true;
       if (target instanceof HTMLInputElement) {
         return !['button', 'checkbox', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(
@@ -129,6 +157,9 @@ export function App() {
     };
 
     const onPointerDown = (event: PointerEvent) => {
+      if (event.isTrusted && event.pointerType === 'mouse' && event.button === 0) {
+        observedPointerDowns.add(event.pointerId);
+      }
       if (!isTextControl(event.target)) return;
       const target = event.target as HTMLElement;
       // Keep the browser's normal click/caret placement, then explicitly
@@ -138,15 +169,71 @@ export function App() {
       });
     };
 
+    const onPointerUp = (event: PointerEvent) => {
+      if (!event.isTrusted || event.pointerType !== 'mouse' || event.button !== 0) return;
+
+      const now = Date.now();
+      while (nativeMouseActivations.length && now - nativeMouseActivations[0] > 1500) {
+        nativeMouseActivations.shift();
+      }
+      const nativeActivationSeen = nativeMouseActivations.length > 0;
+      if (nativeActivationSeen) nativeMouseActivations.shift();
+      const pointerDownObserved = observedPointerDowns.delete(event.pointerId);
+      if (!shouldSynthesizeMouseClick({
+        nativeActivationSeen,
+        pointerDownObserved,
+        isTrusted: event.isTrusted,
+        button: event.button,
+      })) return;
+
+      const element = event.target instanceof Element ? event.target : null;
+      const target = element?.closest<HTMLElement>(
+        'button, input, select, textarea, [role="button"], a, [contenteditable="true"]',
+      );
+      if (!target || target.getAttribute('aria-disabled') === 'true') return;
+      if (
+        (target instanceof HTMLButtonElement || target instanceof HTMLInputElement) &&
+        target.disabled
+      ) return;
+
+      if (isTextControl(target)) {
+        void window.mc.setWindowFocusable(true).then(() => {
+          if (document.contains(target)) target.focus();
+        });
+        return;
+      }
+
+      // Electron/Windows can deliver the release after WM_MOUSEACTIVATE while
+      // withholding the matching down event. In that case Chromium will never
+      // emit click, so invoke the matched control once without activating the
+      // overlay or changing the presenter's foreground window.
+      window.setTimeout(() => {
+        if (target.isConnected) target.click();
+      }, 0);
+    };
+
+    const onPointerCancel = (event: PointerEvent) => {
+      observedPointerDowns.delete(event.pointerId);
+    };
+
     const onDocumentFocusOut = () => restoreOverlayBehavior();
     document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('pointerup', onPointerUp, true);
+    document.addEventListener('pointercancel', onPointerCancel, true);
     document.addEventListener('focusout', onDocumentFocusOut, true);
     const onWindowBlur = () => restoreOverlayBehavior(true);
     window.addEventListener('blur', onWindowBlur);
     return () => {
+      for (const type of inputEventTypes) {
+        document.removeEventListener(type, onInputEvent, true);
+        document.removeEventListener(type, onInputEvent, false);
+      }
       document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('pointerup', onPointerUp, true);
+      document.removeEventListener('pointercancel', onPointerCancel, true);
       document.removeEventListener('focusout', onDocumentFocusOut, true);
       window.removeEventListener('blur', onWindowBlur);
+      unsubscribeNativeMouseActivation();
     };
   }, []);
 

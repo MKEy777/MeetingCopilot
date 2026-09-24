@@ -40,6 +40,7 @@ import { AppTray, trayIconPath } from './tray';
 import { isRendererCommand, type TrayCommand, type TrayMenuState } from '../shared/trayMenu';
 import { KnowledgeStore } from './knowledge';
 import { SessionStore } from './sessions';
+import { describeNativeWindowMessage } from './uiDebug';
 import { DOC_EXTENSIONS, extractDocText } from './docparse';
 import { basename } from 'path';
 import { chatOnce, chatStream, type ChatResult } from './llm/adapter';
@@ -64,6 +65,7 @@ import {
   type ProviderTestRequest,
   type ProviderTestResult,
   type SettingsPatch,
+  type UiInputDebugEvent,
 } from '../shared/protocol';
 import { mainStrings } from './uiStrings';
 
@@ -230,6 +232,17 @@ function bootstrap(): void {
     win.showInactive();
   }
 
+  function logUiWindowState(event: string): void {
+    if (!win || win.isDestroyed()) return;
+    console.log('[ui-debug] window', JSON.stringify({
+      at: new Date().toISOString(),
+      event,
+      focusable: win.isFocusable(),
+      focused: win.isFocused(),
+      visible: win.isVisible(),
+    }));
+  }
+
   function toggleWindow(): void {
     if (!win) return;
     if (win.isVisible()) win.hide();
@@ -365,6 +378,68 @@ function bootstrap(): void {
     // window as the OS foreground window even when the overlay is clicked.
     // Renderer text controls temporarily opt back into focus through IPC.
     win.setFocusable(false);
+    logUiWindowState('created');
+    win.on('focus', () => logUiWindowState('focus'));
+    win.on('blur', () => logUiWindowState('blur'));
+    win.on('show', () => logUiWindowState('show'));
+    win.on('hide', () => logUiWindowState('hide'));
+    if (process.platform === 'win32') {
+      const nativeMessages = new Map<number, string>([
+        [0x0021, 'WM_MOUSEACTIVATE'],
+        [0x0006, 'WM_ACTIVATE'],
+        [0x0007, 'WM_SETFOCUS'],
+        [0x0008, 'WM_KILLFOCUS'],
+        [0x0201, 'WM_LBUTTONDOWN'],
+        [0x0202, 'WM_LBUTTONUP'],
+      ]);
+      for (const [messageId, message] of nativeMessages) {
+        try {
+          win.hookWindowMessage(messageId, (wParam, lParam) => {
+            if (!win || win.isDestroyed()) return;
+            const details = describeNativeWindowMessage(message, messageId, wParam, lParam);
+            console.log('[ui-debug] native-message', JSON.stringify({
+              at: new Date().toISOString(),
+              ...details,
+              focusable: win.isFocusable(),
+              focused: win.isFocused(),
+              visible: win.isVisible(),
+            }));
+            if (
+              messageId === 0x0021 &&
+              details.hitTest === 1 &&
+              details.inputMessage === 0x0201
+            ) {
+              win.webContents.send(IPC.uiNativeMouseActivation, { at: Date.now() });
+            }
+          });
+        } catch (error) {
+          console.warn('[ui-debug] native-message-hook-failed', JSON.stringify({
+            at: new Date().toISOString(),
+            message,
+            error: (error as Error).message,
+          }));
+        }
+      }
+    }
+    win.webContents.on('unresponsive', () => {
+      console.error('[ui-debug] renderer-unresponsive', JSON.stringify({
+        at: new Date().toISOString(),
+        url: win?.webContents.getURL(),
+      }));
+    });
+    win.webContents.on('responsive', () => {
+      console.log('[ui-debug] renderer-responsive', JSON.stringify({
+        at: new Date().toISOString(),
+        url: win?.webContents.getURL(),
+      }));
+    });
+    win.webContents.on('render-process-gone', (_event, details) => {
+      console.error('[ui-debug] renderer-gone', JSON.stringify({
+        at: new Date().toISOString(),
+        reason: details.reason,
+        exitCode: details.exitCode,
+      }));
+    });
     win.setAlwaysOnTop(true, 'screen-saver');
     win.setContentProtection(settings.data.ui.stealth);
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -867,9 +942,33 @@ function bootstrap(): void {
     });
     ipcMain.handle(IPC.windowFocusableSet, (_e, on: boolean) => {
       const focusable = !!on;
+      const before = win?.isFocusable() ?? null;
       win?.setFocusable(focusable);
       if (focusable) win?.focus();
+      console.log('[ui-debug] focusable-set', JSON.stringify({
+        at: new Date().toISOString(),
+        requested: focusable,
+        before,
+        after: win?.isFocusable() ?? null,
+        focused: win?.isFocused() ?? null,
+      }));
       return focusable;
+    });
+    ipcMain.on(IPC.uiInputDebug, (event, input: UiInputDebugEvent) => {
+      if (event.sender !== win?.webContents || !input || typeof input !== 'object') return;
+      const allowedTypes = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click'];
+      if (!allowedTypes.includes(input.type)) return;
+      console.log('[ui-debug] input', JSON.stringify({
+        at: new Date().toISOString(),
+        type: input.type,
+        phase: input.phase === 'capture' ? 'capture' : 'bubble',
+        targetTag: typeof input.targetTag === 'string' ? input.targetTag.slice(0, 32) : 'unknown',
+        targetId: typeof input.targetId === 'string' ? input.targetId.slice(0, 64) : undefined,
+        isTrusted: !!input.isTrusted,
+        defaultPrevented: !!input.defaultPrevented,
+        button: typeof input.button === 'number' ? input.button : undefined,
+        pointerType: typeof input.pointerType === 'string' ? input.pointerType.slice(0, 16) : undefined,
+      }));
     });
     ipcMain.on(IPC.winHide, () => win?.hide());
     ipcMain.on(IPC.appQuit, () => app.quit());

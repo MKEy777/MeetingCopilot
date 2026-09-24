@@ -14,6 +14,8 @@ import {
   type SessionsFile,
   type SettingsPatch,
   type TrayCommandPayload,
+  type UiInputDebugEvent,
+  type UiNativeMouseActivation,
 } from '../shared/protocol';
 
 export interface McApi {
@@ -35,6 +37,10 @@ export interface McApi {
   setStealth(on: boolean): Promise<boolean>;
   /** Enable focus only while the user is editing a text control. */
   setWindowFocusable(on: boolean): Promise<boolean>;
+  /** Temporary click diagnostics. Payload contains no control text or values. */
+  debugUiInput(event: UiInputDebugEvent): void;
+  /** Observe non-activating Windows clicks for the renderer's targeted fallback. */
+  onUiNativeMouseActivation(cb: (event: UiNativeMouseActivation) => void): () => void;
   sendPcm(buf: ArrayBuffer, captureTs: number, channel: 'them' | 'me'): void;
   captureStarted(): void;
   captureStopped(): void;
@@ -94,6 +100,12 @@ const api: McApi = {
   saveSessions: (data) => ipcRenderer.send(IPC.sessionsSave, data),
   setStealth: (on) => ipcRenderer.invoke(IPC.stealthSet, on),
   setWindowFocusable: (on) => ipcRenderer.invoke(IPC.windowFocusableSet, on),
+  debugUiInput: (event) => ipcRenderer.send(IPC.uiInputDebug, event),
+  onUiNativeMouseActivation: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, event: UiNativeMouseActivation) => cb(event);
+    ipcRenderer.on(IPC.uiNativeMouseActivation, listener);
+    return () => ipcRenderer.removeListener(IPC.uiNativeMouseActivation, listener);
+  },
   sendPcm: (buf, captureTs, channel) => ipcRenderer.send(IPC.capturePcm, buf, captureTs, channel),
   captureStarted: () => ipcRenderer.send(IPC.captureStarted),
   captureStopped: () => ipcRenderer.send(IPC.captureStopped),
