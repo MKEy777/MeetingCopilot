@@ -868,6 +868,33 @@ function bootstrap(): void {
     // cloud engines can't race the subscription (stuck "模型加载中" bug)
     ipcMain.handle(IPC.asrReplay, () => ({ ready: asr.lastReady, status: asr.lastStatus }));
     ipcMain.handle(IPC.settingsSet, (_e, patch: SettingsPatch) => {
+      const asrPatch = patch.asr;
+      const currentAsr = settings.data.asr;
+      const textChanged = (next?: string, current?: string): boolean =>
+        next !== undefined && (next.trim() || undefined) !== (current?.trim() || undefined);
+      const keyChanged = (
+        next: string | undefined,
+        current: string | undefined,
+        hasStoredKey: boolean,
+      ): boolean => next !== undefined && (next === '' ? hasStoredKey : next !== current);
+      const nextBackend = asrPatch?.backend ?? currentAsr.backend ?? 'local';
+      const asrEngineChanged = !!asrPatch && (
+        (asrPatch.backend !== undefined && asrPatch.backend !== (currentAsr.backend ?? 'local')) ||
+        (nextBackend === 'cloud' && (
+          textChanged(asrPatch.cloud?.baseUrl, currentAsr.cloud?.baseUrl) ||
+          textChanged(asrPatch.cloud?.model, currentAsr.cloud?.model) ||
+          keyChanged(asrPatch.cloud?.apiKey, settings.getCloudAsrApiKey(), !!currentAsr.cloud?.apiKeyEnc)
+        )) ||
+        (nextBackend === 'cloud-realtime' && (
+          textChanged(asrPatch.realtime?.baseUrl, currentAsr.realtime?.baseUrl) ||
+          textChanged(asrPatch.realtime?.model, currentAsr.realtime?.model) ||
+          keyChanged(asrPatch.realtime?.apiKey, settings.getRealtimeAsrApiKey(), !!currentAsr.realtime?.apiKeyEnc)
+        )) ||
+        (nextBackend === 'local-realtime' &&
+          textChanged(asrPatch.localRealtime?.model, currentAsr.localRealtime?.model ?? 'fun-asr-nano'))
+      );
+      const asrLanguageChanged =
+        asrPatch?.language !== undefined && asrPatch.language !== currentAsr.language;
       settings.applyPatch(patch);
       if (
         patch.ui?.hotkeyToggle !== undefined ||
@@ -882,15 +909,11 @@ function bootstrap(): void {
       // the tray menu is a snapshot: rebuild it in the newly chosen language
       if (patch.ui?.lang !== undefined) refreshTray();
       if (patch.ui?.autoLaunch !== undefined) applyAutoLaunch(patch.ui.autoLaunch);
-      // backend/cloud change => rebuild the ASR worker with the new engine.
-      // language alone can hot-update without a restart.
-      if (
-        patch.asr &&
-        (patch.asr.backend !== undefined ||
-          patch.asr.cloud !== undefined ||
-          patch.asr.realtime !== undefined ||
-          patch.asr.localRealtime !== undefined)
-      ) {
+      // Rebuild only when the active engine's effective configuration changed.
+      // SettingsPanel sends a complete ASR snapshot even for unrelated edits;
+      // comparing values avoids bouncing a live engine just because the user
+      // saved an API key or a display preference. Language can hot-update.
+      if (asrEngineChanged) {
         // While the wizard is up the engine must NOT be rebuilt per key save:
         // on a first run nothing is configured yet (a restart would spawn the
         // local python sidecar the user never agreed to), and in a re-run it
@@ -898,8 +921,8 @@ function bootstrap(): void {
         // plan as one final patch; the restart happens exactly once after it.
         if (setupWin || !settings.data.onboarding.completed) pendingAsrRestart = true;
         else void asr.stop().then(() => startAsr());
-      } else if (patch.asr?.language) {
-        asr.setLanguage(patch.asr.language);
+      } else if (asrLanguageChanged) {
+        asr.setLanguage(settings.data.asr.language);
       }
       return publicSettings();
     });
