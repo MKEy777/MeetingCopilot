@@ -22,12 +22,8 @@ import {
   isLikelyQuestion,
   langDirective,
   questionHint,
-  smartClip,
-  MAX_BACKGROUND_CHARS,
   MAX_CONTEXT_CHARS,
   MAX_MEMO_CHARS,
-  SECOND_RESUME_PRIORITY,
-  RESUME_PRIORITY,
 } from '../electron/llm/prompts';
 
 describe('SseParser', () => {
@@ -251,12 +247,11 @@ describe('dual-slot material injection (resume / second resume)', () => {
     expect(sys).not.toContain('【第二简历】（');
     expect(sys).not.toContain('【简历结束】');
   });
-  it('caps oversized material to the char budget', () => {
+  it('keeps oversized material in full', () => {
     const huge = 'A'.repeat(20000);
     const msgs = buildAnswerMessages({ mode: 'segment', question: 'x', recentTranscript: [], resume: huge });
     const sys = msgs[0].content as string;
-    // system prompt = persona + <=8000 material chars + delimiters
-    expect(sys.length).toBeLessThan(9000);
+    expect(sys).toContain(huge);
   });
   it('translate mode never carries material', () => {
     const msgs = buildAnswerMessages({
@@ -291,27 +286,10 @@ describe('buildStablePrefix (prefix-cache friendliness)', () => {
     });
     expect(msgs[0].content).toBe(prefix);
   });
-  it('gives the full budget to a lone slot', () => {
+  it('keeps a long second resume in full', () => {
     const huge = 'B'.repeat(20000);
     const p = buildStablePrefix('', huge, 'chinese');
-    expect(p).toContain('B'.repeat(MAX_BACKGROUND_CHARS));
-  });
-});
-
-describe('smartClip (priority-aware budget truncation)', () => {
-  it('returns text unchanged when under budget', () => {
-    expect(smartClip('短文本', 100, RESUME_PRIORITY)).toBe('短文本');
-  });
-  it('keeps interview reference paragraphs over filler', () => {
-    const filler = '自我评价：热爱学习。'.repeat(30); // ~300 chars, no keyword
-    const reference = 'Redis 八股：RDB 是快照，AOF 记录写命令。';
-    const text = `${filler}\n\n${reference}\n\n${filler}`;
-    const out = smartClip(text, reference.length + 10, SECOND_RESUME_PRIORITY);
-    expect(out).toContain('Redis 八股');
-    expect(out.length).toBeLessThanOrEqual(reference.length + 10);
-  });
-  it('hard-slices a single oversized paragraph', () => {
-    expect(smartClip('A'.repeat(500), 100, RESUME_PRIORITY)).toHaveLength(100);
+    expect(p).toContain(huge);
   });
 });
 
@@ -481,11 +459,11 @@ describe('buildVisionMessages', () => {
     expect(system).toContain('【第二简历】');
   });
 
-  it('keeps both reference slots within the shared background budget', () => {
+  it('keeps both reference slots in full', () => {
     const msgs = buildVisionMessages('回答截图中的问题', 'data:image/png;base64,AAA', 'R'.repeat(9000), 'S'.repeat(9000));
     const system = msgs[0].content as string;
-    expect(system.match(/R/g)?.length).toBe(3000);
-    expect(system.match(/S/g)?.length).toBe(5000);
+    expect(system).toContain('R'.repeat(9000));
+    expect(system).toContain('S'.repeat(9000));
   });
 });
 

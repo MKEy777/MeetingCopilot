@@ -42,46 +42,6 @@ const PERSONA = [
   '- 没把握的问题，给出稳妥的通用说法，或一句得体的争取思考时间的话术。',
 ];
 
-/** total injected background budget; keeps prompts bounded regardless of size */
-export const MAX_BACKGROUND_CHARS = 8000;
-/** when both slots are present the second resume gets the bigger share */
-export const SECOND_RESUME_BUDGET = 5000;
-export const RESUME_BUDGET = MAX_BACKGROUND_CHARS - SECOND_RESUME_BUDGET;
-
-/** resume: keep project/work-experience sections when over budget */
-export const RESUME_PRIORITY =
-  /(项目|经历|经验|工作|实习|成果|职责|Project|Experience|Work|Achievement)/i;
-/** second resume: keep interview questions and technical reference sections */
-export const SECOND_RESUME_PRIORITY =
-  /(八股|面试题|面试问题|常见问题|参考答案|答题要点|技术原理|原理|知识点|技术要点|算法|复杂度|面试|Interview|Question|Answer|Principle|Fundamental|Technical)/i;
-
-/**
- * Deterministic budget clip that prefers paragraphs matching `priority`
- * (e.g. a resume's project experience, a second resume's interview notes) instead of a
- * blind head-truncation. Output order stays the original document order.
- */
-export function smartClip(text: string, budget: number, priority: RegExp): string {
-  const t = text.trim();
-  if (t.length <= budget) return t;
-  const paras = t.split(/\n{2,}/);
-  const picked = new Set<number>();
-  let used = 0;
-  const tryTake = (i: number) => {
-    if (picked.has(i)) return;
-    const cost = paras[i].length + 2; // + join separator
-    if (used + cost > budget) return;
-    picked.add(i);
-    used += cost;
-  };
-  for (let i = 0; i < paras.length; i++) if (priority.test(paras[i])) tryTake(i);
-  for (let i = 0; i < paras.length; i++) tryTake(i);
-  if (picked.size === 0) return t.slice(0, budget); // one giant paragraph
-  return paras
-    .map((p, i) => (picked.has(i) ? p : null))
-    .filter((p): p is string => p !== null)
-    .join('\n\n');
-}
-
 /**
  * The BYTE-STABLE system prompt: persona + second resume + resume + language directive.
  * Same inputs MUST yield the identical string (no timestamps / randomness) —
@@ -96,7 +56,7 @@ export function buildStablePrefix(resume: string, secondResume: string, lang: An
     parts.push(
       '',
       '【第二简历】（我的首选面试参考资料：八股、常见面试问题、答题要点等）',
-      smartClip(sr, r ? SECOND_RESUME_BUDGET : MAX_BACKGROUND_CHARS, SECOND_RESUME_PRIORITY),
+      sr,
       '【第二简历结束】',
     );
   }
@@ -104,7 +64,7 @@ export function buildStablePrefix(resume: string, secondResume: string, lang: An
     parts.push(
       '',
       '【简历】（我的个人经历资料，用于补充真实经历）',
-      smartClip(r, sr ? RESUME_BUDGET : MAX_BACKGROUND_CHARS, RESUME_PRIORITY),
+      r,
       '【简历结束】',
     );
   }
@@ -238,22 +198,10 @@ export function buildVisionMessages(
   const sr = (secondResume ?? '').trim();
   const references: string[] = [];
   if (sr) {
-    references.push(
-      `【第二简历】（首选面试参考资料）\n${smartClip(
-        sr,
-        r ? SECOND_RESUME_BUDGET : MAX_BACKGROUND_CHARS,
-        SECOND_RESUME_PRIORITY,
-      )}`,
-    );
+    references.push(`【第二简历】（首选面试参考资料）\n${sr}`);
   }
   if (r) {
-    references.push(
-      `【简历】（个人经历补充资料）\n${smartClip(
-        r,
-        sr ? RESUME_BUDGET : MAX_BACKGROUND_CHARS,
-        RESUME_PRIORITY,
-      )}`,
-    );
+    references.push(`【简历】（个人经历补充资料）\n${r}`);
   }
   const sys =
     '你是面试截图答题助手。请先在内部判断截图内容属于编程题还是问答题，禁止把分类过程、推理过程或客套话输出给用户。只返回用户可以直接使用的结果。\n\n' +
@@ -301,8 +249,8 @@ export function buildAnswerMessages(input: AnswerPromptInput): ChatMessage[] {
   // transcript + KB are offered only as optional reference.
   if (input.mode === 'free') {
     const refs: string[] = [];
-    if (secondResume) refs.push(`【第二简历】（首选面试参考资料）\n${secondResume.slice(0, MAX_BACKGROUND_CHARS)}`);
-    if (resume) refs.push(`【简历】（个人经历补充资料）\n${resume.slice(0, MAX_BACKGROUND_CHARS)}`);
+    if (secondResume) refs.push(`【第二简历】（首选面试参考资料）\n${secondResume}`);
+    if (resume) refs.push(`【简历】（个人经历补充资料）\n${resume}`);
     if (context.length) refs.push(`【最近的对话转录】\n${context.join('\n')}`);
     const msgs: ChatMessage[] = [];
     if (refs.length) {
