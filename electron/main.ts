@@ -77,7 +77,7 @@ const MODEL_ID = 'onnx-community/whisper-large-v3-turbo-ONNX';
 /** tray 「检查更新」 (Phase 4). A real updater is Phase 5; until then the honest
  * answer is the releases page, opened through the same allowlist as every other
  * documentation link. */
-const RELEASES_URL = 'https://github.com/JWM0203/MeetingCopilot/releases/latest';
+const RELEASES_URL = 'https://github.com/MKEy777/MeetingCopilot/releases/latest';
 
 /** Capture the primary display as a complete image for screenshot Q&A. The
  * caller chooses the primary source explicitly so multi-monitor setups do not

@@ -1,218 +1,90 @@
-<div align="center">
+# MSI System Helper
 
-# MeetingCopilot
+**面向技术面试的实时转录、资料参考与 AI 回答工具**
 
-**Real-time meeting & interview copilot for Windows and macOS**
+MSI System Helper 是本机使用时设置的应用显示名称，与 MSI 无官方关联。源代码项目及 GitHub 仓库仍名为 MeetingCopilot。
 
-Live transcription of the other side · first-person teleprompter answers · capture protection
+[GitHub 仓库](https://github.com/MKEy777/MeetingCopilot) · [安装包发布页](https://github.com/MKEy777/MeetingCopilot/releases) · [API Key 指南](docs/user/API_KEYS.zh-CN.md) · [快速开始](docs/user/QUICK_START.zh-CN.md) · [故障排查](docs/user/TROUBLESHOOTING.zh-CN.md)
 
-<a href="https://github.com/JWM0203/MeetingCopilot/stargazers"><img src="https://img.shields.io/github/stars/JWM0203/MeetingCopilot?style=flat-square&logo=github&color=2a6df4" alt="GitHub stars"></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-3da639?style=flat-square" alt="license"></a>
-<a href="https://github.com/JWM0203/MeetingCopilot"><img src="https://img.shields.io/badge/GitHub-repo-181717?style=flat-square&logo=github" alt="GitHub repo"></a>
-<a href="https://gitee.com/jwm0302/MeetingCopilot"><img src="https://img.shields.io/badge/Gitee-China%20mirror-C71D23?style=flat-square&logo=gitee" alt="Gitee mirror"></a>
-<a href="https://www.xiaohongshu.com/discovery/item/6a50df530000000007020f79?source=webshare&xhsshare=pc_web&xsec_token=ABbqtJXWoEQSYl-hNrBxJbXeGEZWoH6YjnAYj97pjKEpo=&xsec_source=pc_share"><img src="https://img.shields.io/badge/小红书-视频效果-ff2442?style=flat-square&logo=xiaohongshu&logoColor=white" alt="小红书视频效果"></a>
-<a href="https://www.xiaohongshu.com/discovery/item/6a50ddc800000000080027a6?source=webshare&xhsshare=pc_web&xsec_token=YBsteWYkixo34xXwfYeNXKL1SFbiOeg7mxQAZyq7wQIc4=&xsec_source=pc_share"><img src="https://img.shields.io/badge/小红书-开源推文-ff2442?style=flat-square&logo=xiaohongshu&logoColor=white" alt="小红书开源推文"></a>
+本项目可用于面试准备，以及符合面试方规则的辅助场景。请遵守所在地法律和对方关于使用 AI 工具的要求。
 
-[简体中文](README.zh-CN.md) · [Download](#download) · [5-minute setup](#5-minute-setup) · [Features](#features) · [ASR Backends](#asr-backends) · [Development](#development) · [License](#license)
+![实时转录与回答界面演示](docs/demo.gif)
 
-</div>
+## 面试场景下怎么用
 
-## Download
+### 1. 配置云端 API
 
-**Just want to use it?** Download the installer — no Node.js, no Python, no commands.
-**Want to hack on it?** Skip to [Development](#development) and run from source.
+首次启动会进入配置向导。选择「低延迟推荐」可使用阿里云百炼实时语音识别和 DeepSeek AI 回答，需要各自的 API Key；「极简配置」可用 MiMo 的一个 Key 同时配置两项服务（Beta）。也可以在设置中分别选择服务商。
 
-**[⬇ Get the latest release](https://github.com/JWM0203/MeetingCopilot/releases/latest)**
+如果只使用云端 API，不需要安装 Python、下载本地语音模型或配置本地大模型。API 用量由服务商直接计费；向导中的连接测试会发起小额真实请求，可能产生少量费用。
 
-| File | Type | Best for |
-|---|---|---|
-| `MeetingCopilot-<version>-win-x64.exe` | Installer (NSIS, per-user) | Normal use — Start-menu and desktop shortcuts, upgrades in place |
-| `MeetingCopilot-<version>-win-x64-portable.exe` | Portable | Not installing anything; note that settings still live in `%APPDATA%` |
+### 2. 导入面试资料
 
-**Requirements:** Windows 10 / 11 (x64), no administrator rights, plus your own API key(s) — MeetingCopilot is bring-your-own-key and collects no fee.
+在右侧回答栏分别点击 **📄简历** 和 **📋第二简历**。每个会话可以有自己的资料，支持 `.md`、`.txt`、`.docx`、`.pdf`，文件解析在本机完成。
 
-> ⚠️ **This beta is not code-signed yet**, so Windows SmartScreen will warn you. Confirm the file came from the official release page, then *More info → Run anyway*. Each `.exe` ships a matching `.exe.sha256` with the hash CI computed — verify it with `Get-FileHash .\MeetingCopilot-<version>-win-x64.exe -Algorithm SHA256`.
+- **简历**：放个人经历、项目和技能，用于回答与本人经历有关的问题。
+- **第二简历**：放面试参考资料，例如八股、技术原理、常见面试题和答题要点。
 
-> 🍎 **macOS:** no packaged build in this release. macOS is supported when run from source — see [INSTALL_MACOS.en.md](docs/user/INSTALL_MACOS.en.md).
+提问时，两份资料会作为上下文发送给你配置的大模型；回答知识优先参考第二简历，涉及个人经历时以简历中的真实内容为依据。没有配置资料时，也可以直接输入问题提问。
 
-**User guides:** [Quick start](docs/user/QUICK_START.en.md) · [API keys](docs/user/API_KEYS.en.md) · [Troubleshooting](docs/user/TROUBLESHOOTING.en.md) · [Windows install & data locations](docs/user/INSTALL_WINDOWS.en.md)
+### 3. 开始转录并获取回答
 
----
+1. 播放一段测试音频，在向导的声音检测步骤确认音量条有变化。
+2. 回到主界面，点击 **▶ 开始**。Windows 下应用可以采集电脑正在播放的系统声音；麦克风转录是单独的可选通道。
+3. 在转录栏的问题上点击 **⚡答**，或打开 **持续答**，让应用在识别到疑问句时自动生成回答建议。
+4. 使用 **答:中 / 答:EN** 切换回答语言；可在会话栏查看和复制回答。
 
-![Live demo: real-time transcription + auto answer](docs/demo.gif)
+### 4. 使用全屏截图问答
 
-*Real capture, no mockup: the interviewer's voice is transcribed while they are still speaking (left, live gray subtitle), and a read-aloud answer guided by your second resume streams in automatically (right).*
+在标题栏切换到 **多模态**，配置视觉模型 API 后，回答栏会显示 **📷** 按钮。点击按钮或使用默认快捷键 **Control+Shift+S**，应用会直接截取主显示器全屏并向视觉模型提问，不需要拖动框选。你也可以先在回答栏输入问题，再提交截图。
 
-### 🎬 3-minute real-world walkthrough
+截图包含当前主显示器画面，并会发送给你配置的视觉模型；截图前请确认画面中没有不希望发送的内容。快捷键可在设置中调整。
 
-[![Watch the demo video](docs/video-poster.jpg)](docs/MeetingCopilot-demo.mp4)
+## 新增与常用功能
 
-*Click to watch (with sound): using an English podcast and a Chinese vlog as the "other side" — live transcription of both languages, inline translation, auto answers in Chinese and English, 0.94 s end-to-end latency on screen.*
+- **第二简历作为面试知识库**：技术知识题优先参考第二简历；行为题结合简历中的实际经历组织回答，避免把参考资料中的示例写成个人经历。
+- **全屏截图问答**：直接分析主显示器中的编程题、文字或图表；视觉模型根据截图生成答案或代码。
+- **稿子区与三栏布局**：打开标题栏的「稿子开」显示稿子栏，可粘贴并滚动阅读；拖动分隔线调整稿子、转录和回答栏宽度，也可收起暂时不用的面板。稿子内容只在本次应用运行期间保留。
+- **独立面试会话**：可以新建、切换和重命名会话；每个会话分别保存转录、问答和导入资料。
+- **中英面试支持**：转录可识别中英文切换；回答语言可单独设为中文或英文。
 
-## 5-minute setup
+## 获取与启动
 
-The first launch opens a setup wizard — a normal, screen-shareable window, so someone can walk you through it remotely. Five steps:
+### Windows 安装包
 
-1. **Welcome** — what bring-your-own-key means, what an API key is, and exactly what leaves your machine. Pick 中文 / English here; that becomes the app's language.
-2. **Plan** — *Low latency* (Alibaba Cloud realtime ASR + DeepSeek answers, 2 keys), *Minimal* (MiMo for both, 1 key, Beta), *Transcription only* (1 key), or *Advanced / local* (change nothing, configure it yourself).
-3. **Services** — the provider tutorial is inline: open the key page, paste, "Save and test connection". Keys are encrypted with the OS credential store before they touch disk.
-4. **Connection test** — a live level meter proves the app can hear your computer, plus the optional microphone channel and a checklist of what is still missing.
-5. **Done** — the whole plan is written as one settings update and the main window opens.
+如果 [Releases 发布页](https://github.com/MKEy777/MeetingCopilot/releases) 已提供安装包，可从该页下载。若页面暂时没有发布版本，请按下面的源码方式运行。
 
-![Setup wizard, step 2: choosing a plan](docs/setup-wizard-en.png)
+### 从源码运行
 
-*Step 2 "Plan": each card states plainly how many platforms you have to sign up for and how many keys it needs; "Low latency" is preselected. Local backends stay out of the way behind the "Advanced setup and local modes" link.*
-
-![Setup wizard, step 3: pasting the API keys](docs/setup-keys-en.png)
-
-*Step 3 "Services": one card per service, with the official key page, the official docs and a step-by-step guide right inside it — no hunting through a browser. Paste, press "Save and test connection", and the key is encrypted by the OS credential store before it touches disk.*
-
-Then: play some speech, hit **▶ Start**, click **⚡Ans** on any line. Full walkthrough in [QUICK_START.en.md](docs/user/QUICK_START.en.md).
-
-You can reopen the wizard any time from *⚙ Settings → Run the setup wizard again*, and the in-app **Help & guides** (tray menu or Settings) has the same content offline.
-
-![settings panel, English UI](docs/settings-en.png)
-
-## Features
-
-- 🎧 **Hears the other side directly — no meeting bot.** Windows captures system loopback audio. macOS uses a selectable audio input (choose a virtual device such as BlackHole for meeting/system audio). An independent microphone channel transcribes your own voice separately.
-- ⚡ **Four switchable ASR backend families** — local sidecars (FunASR by default; experimental MOSS-Transcribe 0.9B), local Whisper turbo (offline fallback, DirectML GPU), Alibaba Cloud `fun-asr-realtime`, and MiMo per-segment. FunASR provides live partials; MOSS emits a finalized utterance after a pause.
-- 🌍 **Bilingual (zh / en) out of the box** — the ASR detects Chinese↔English switches automatically mid-meeting, with no settings to touch; one click on the answer-language toggle (`A:EN`) and the teleprompter output flips to English too. Built for English interviews and code-switching conversations.
-- 🌐 **Fully English or Chinese interface** — every label, tooltip, dialog and status message is available in both languages. Switch under *Settings → Appearance → UI Language*; first launch follows your OS language automatically. UI language and answer language are independent, so you can run an English UI while reading Chinese answers, or vice versa.
-- 🧠 **First-person teleprompter answers** — bring your own key, any OpenAI-compatible LLM (DeepSeek recommended). Answers are written to be read aloud verbatim: conclusion first, then 2-3 short points; STAR for behavioral questions; idea → key points → complexity for technical ones. The second resume is preferred, while personal experience stays grounded in your resume.
-- 📄 **Per-session resume + second resume slots** — import `.md/.txt/.docx/.pdf`; parsing is local and deterministic. Use the second resume for interview notes, common questions, technical fundamentals and answer points; the configured LLM uses it as the preferred reference when answering. Question-type detection appends an answering hint.
-- 🔁 **Rolling interview memo** — a structured summary (questions asked / facts you claimed / interviewer focus) updates asynchronously after each answer, so a 60-minute interview stays self-consistent while per-request tokens stay flat.
-- 🚀 **Prefix-cache prewarm** — pressing ▶ fires a 1-token request that pre-builds the LLM provider's KV prefix cache, so the first real answer prefills from cache (verified via DeepSeek `prompt_cache_hit_tokens`); kept warm automatically during capture.
-- 🖼️ **Full-screen Q&A** — capture the complete primary display with one click and ask a vision model (MiMo / Gemini) about it.
-- 🥷 **Capture protection** — content protection plus a global hide/show hotkey. Windows excludes the window from supported captures; macOS cannot guarantee invisibility against modern ScreenCaptureKit clients.
-- 🩺 **Connection tests, service status and local diagnostics** — one click tells you whether a key, the network or the account is at fault (14 normalized error codes), and the diagnostics report is built locally with no keys, transcripts or imported resume/reference text in it.
-- 🔔 **System tray** — show/hide, start/stop transcription, new session, settings, service status, help and quit, all without a taskbar button. Optional start-at-login, off by default.
-- 🌗 **Dark / light / follow-system themes**, 3-step answer font size, latency HUD, inline translation, multi-session with fully isolated transcript + chat + material per meeting.
-
-| Dark | Light |
-|---|---|
-| ![dark theme, English UI](docs/main-dark-en.png) | ![light theme, English UI](docs/main-light-en.png) |
-
-### One click between the English and Chinese UI
-
-![Switching the UI language from Chinese to English](docs/language-switch.gif)
-
-*Settings → Appearance → UI Language: the whole interface — title bar, panels, tooltips, dialogs — flips instantly. The screenshots above show the English UI; the Chinese one is in [README.zh-CN.md](README.zh-CN.md).*
-
-### Bilingual in one session
-
-![Bilingual demo: automatic zh/en switching](docs/demo-bilingual.gif)
-
-*A Chinese question, then an English one — same session, nothing reconfigured. The local ASR picks up the language switch automatically (both at ~1.6 s), and after one click on `答:EN` the answer streams out in English, still guided by the same second resume.*
-
-![bilingual answer](docs/bilingual.png)
-
-## ASR Backends
-
-| Backend | Latency | Cost | Privacy | Notes |
-|---|---|---|---|---|
-| Aliyun `fun-asr-realtime` *(recommended for packaged users)* | best | pay-per-use | cloud | word-by-word streaming, server-side punctuation, nothing to install |
-| MiMo per-segment | ~1 s/seg | pay-per-use | cloud | simple per-utterance cloud ASR; one key can also serve the answers |
-| **Local FunASR streaming** *(default when running from source)* | ~1.2–1.8 s | free | ✅ fully local | `Fun-ASR-Nano` (zh+en, punctuation) or `paraformer` true streaming (zh-only, snappier subtitles) |
-| MOSS-Transcribe-Diarize 0.9B *(experimental)* | finalized after a pause | free | ✅ fully local | 50+ languages, hotwords, long-form diarization; live mode consumes transcript text only |
-| Local Whisper turbo | ~2 s on supported Windows GPUs | free | ✅ fully local | DirectML on Windows; CPU fallback elsewhere |
-
-**Which one should you pick?** If you installed the packaged build, use a **cloud** backend: it needs one API key and nothing else. The **local** backends are an advanced option — free and fully private, but you have to bring your own Python environment and let the model weights download, and the installer ships neither.
-
-## Local ASR & advanced setup
-
-### Requirements per backend
-
-| Component | Requirement |
-|---|---|
-| OS | Windows 10 / 11, or Apple-silicon macOS 14+ |
-| Cloud ASR *(recommended)* | Alibaba Cloud DashScope API key, or a MiMo key |
-| LLM | Any OpenAI-compatible API key — DeepSeek recommended (fast, cheap, prefix caching) |
-| Local streaming ASR | Python 3.10/3.11 with `funasr` + `torch`; CUDA, Apple MPS, or CPU fallback |
-| Experimental MOSS ASR | isolated Python 3.12 env; NVIDIA CUDA BF16 first, automatic CPU fallback |
-| Local Whisper *(offline fallback)* | `whisper-large-v3-turbo` ONNX weights; DirectML on Windows, CPU elsewhere |
-| Running from source | Node.js ≥ 20 and npm |
-
-Audio capture, Python setup, stealth behavior and hotkeys differ per platform — each OS has its own guide:
-
-| Platform | Audio capture | Stealth | Guide |
-|---|---|---|---|
-| 🪟 **Windows 10 / 11** | system loopback — zero config | window excluded from captures | **[docs/windows/SETUP.md](docs/windows/SETUP.md)** |
-| 🍎 **macOS 14+ (Apple silicon)** | input device + [BlackHole](https://github.com/ExistentialAudio/BlackHole) routing | best-effort (ScreenCaptureKit may capture) | **[docs/macos/SETUP.md](docs/macos/SETUP.md)** |
-
-### Local streaming FunASR
-
-One-time Python environment, then the app **auto-spawns and reaps** the sidecar
-(`tools/funasr_stream_server.py`, `ws://127.0.0.1:10097`) — selecting the preset
-in Settings is all you do. The selected model downloads automatically from
-ModelScope on first run (~880 MB for paraformer, ~1.7 GB for Nano). `--device
-auto` picks CUDA / Apple MPS / CPU with automatic CPU fallback.
-
-- **Windows** (conda env, NVIDIA GPU): see [docs/windows/SETUP.md](docs/windows/SETUP.md#local-streaming-funasr-default-asr-backend)
-- **macOS** (project `.venv`, Apple MPS): see [docs/macos/SETUP.md](docs/macos/SETUP.md#local-streaming-funasr-default-asr-backend)
-
-If your Python lives elsewhere, set `MC_FUNASR_PYTHON` to its full path.
-
-### MOSS-Transcribe-Diarize 0.9B (experimental)
-
-MOSS is a one-shot generative model, not native streaming ASR. MeetingCopilot invokes the isolated `tools/moss_asr_server.py` sidecar after an utterance ends instead of repeatedly decoding a growing buffer. CUDA BF16 is attempted first and initialization failures fall back to CPU; the existing FunASR environment and default remain unchanged.
-
-- **Windows:** see [docs/windows/SETUP.md](docs/windows/SETUP.md#experimental-moss-transcribe-diarize-09b)
-- Custom interpreter: set `MC_MOSS_PYTHON`; force a device with `MC_MOSS_DEVICE=cuda:0` or `cpu`.
-
-### Local Whisper turbo
-
-Place [`onnx-community/whisper-large-v3-turbo-ONNX`](https://huggingface.co/onnx-community/whisper-large-v3-turbo-ONNX) under `<userData>/models/onnx-community/whisper-large-v3-turbo-ONNX/` — `%APPDATA%/MeetingCopilot/` on Windows, `~/Library/Application Support/MeetingCopilot/` on macOS (`encoder_model_fp16.onnx`, `decoder_model_merged_quantized.onnx`, plus config/tokenizer files). The encoder uses DirectML on Windows and CPU elsewhere.
-
-### Cloud endpoints
-
-- **Aliyun DashScope**: endpoint `wss://dashscope.aliyuncs.com/api-ws/v1/inference`, model `fun-asr-realtime` or `paraformer-realtime-v2`.
-- **MiMo**: `https://api.xiaomimimo.com/v1`, model `mimo-v2.5-asr`.
-
-## Privacy
-
-- API keys are encrypted at rest with Electron `safeStorage` (Windows DPAPI / macOS Keychain) and never reach the renderer process.
-- All data (settings / sessions / materials) lives under Electron's per-user `userData` directory (`%APPDATA%/MeetingCopilot/` on Windows and `~/Library/Application Support/MeetingCopilot/` on macOS). No telemetry, no accounts, no server.
-- With the local ASR backends, audio never leaves your machine; with BYOK LLMs, transcripts go only to the provider you configured.
-- The diagnostics report is built locally and contains no keys, transcripts or imported resume/reference text — it is safe to paste into a public issue.
-
-## Development
+需要 Node.js 20 或更高版本。克隆仓库后，在项目目录执行：
 
 ```bash
-git clone https://github.com/JWM0203/MeetingCopilot.git
+git clone https://github.com/MKEy777/MeetingCopilot.git
 cd MeetingCopilot
-npm install        # postinstall applies patches/ (transformers.js patch — do not remove)
-npm run build      # builds main + preload + renderer into out/
-npm start          # starts in the background; closing the terminal keeps it running
-npm stop           # stops the background MeetingCopilot process
-# Windows can also launch it by double-clicking start.bat
+npm install
+npm run build
+npm start
 ```
 
-Running from source starts the same first-run wizard as the packaged build. Set `MC_DEV_DEFAULT_LOCAL_ASR=1` to skip it and go straight to the overlay with the local FunASR defaults.
+`npm start` 会在后台启动应用，关闭终端后应用仍会运行。结束时执行：
 
 ```bash
-npm test            # unit tests (prompt building / VAD / stores / doc parsing / ASR protocol / tray / links)
-npm run typecheck   # dual tsconfig (main + renderer)
-npm run dev         # vite HMR dev mode
-npm run verify      # typecheck + tests + build, the pre-commit gate
-npm run dist:dir    # unpacked build into release/win-unpacked
-npm run dist:win    # nsis + portable installers
-npm run smoke:packaged        # boots the packaged exe and asserts both startup paths
-node tools/rt-asr-smoke.mjs   # streaming-ASR protocol smoke (set MC_RT_URL / MC_RT_KEY)
+npm stop
 ```
 
-Platform setup for developers (python envs, audio routing, stealth): [docs/windows/SETUP.md](docs/windows/SETUP.md) · [docs/macos/SETUP.md](docs/macos/SETUP.md).
+源码运行和安装包使用相同的配置向导。Windows 环境配置及本地转录后端说明见 [Windows 配置指南](docs/windows/SETUP.zh-CN.md)。本地 ASR 是可选项；只使用云端 API 时无需配置它。
 
-> 🇨🇳 If npm / Electron downloads are slow in China, create a `.npmrc` containing
-> `registry=https://registry.npmmirror.com` and
-> `electron_mirror=https://npmmirror.com/mirrors/electron/`.
+## 隐私与数据
 
-Architecture in one line: Electron main process (window / stealth / tray / IPC / LLM routing / ASR host) → ASR engines inside a **utilityProcess** (never the main process — DirectML inference wedges there) → React renderer (transcript pane + answer session pane); all state lives in plain JSON files, never DOM storage.
+- API Key 使用系统凭据服务加密保存在本机；服务商直接向你的账号收取 API 费用。
+- 使用云端语音识别时，采集到的音频会发送给所选语音识别服务商。
+- 提问时，相关转录、问题文本及你导入的简历和第二简历会发送给所选大模型服务商；截图问答会将全屏截图发送给所选视觉模型服务商。
+- 设置、会话和资料保存在本机用户数据目录。更详细的配置步骤见 [快速开始](docs/user/QUICK_START.zh-CN.md) 和 [Windows 安装说明](docs/user/INSTALL_WINDOWS.zh-CN.md)。
 
-## Disclaimer
+## 项目与协议
 
-This tool is intended for personal learning and assistive use. Whether and how real-time assistance may be used in meetings or interviews depends on your local laws and the policies of the other party — you are solely responsible for how you use this software.
+- 项目源码：[MKEy777/MeetingCopilot](https://github.com/MKEy777/MeetingCopilot)
+- 问题反馈：[GitHub Issues](https://github.com/MKEy777/MeetingCopilot/issues)
+- 开源协议：[Apache License 2.0](LICENSE)
 
-## License
-
-**[Apache License 2.0](LICENSE)** — free to use, modify and redistribute, including commercially, under the terms of the license.
+MSI System Helper 是本机自定义的应用名称，不表示 MSI 对本项目的开发、认证或背书。
